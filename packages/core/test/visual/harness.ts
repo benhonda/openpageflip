@@ -140,14 +140,34 @@ async function capture(element: Element): Promise<ImageData> {
 
 export type Comparison = { mismatch: number; total: number; ratio: number };
 
-/** Pixels whose colour differs by more than a rounding error, as a fraction of the image. */
-function compare(a: ImageData, b: ImageData): Comparison & { diff: ImageData } {
+/** A stage-relative area in CSS pixels that is left out of a comparison. */
+export type Rect = { x: number; y: number; width: number; height: number };
+
+/**
+ * Pixels whose colour differs by more than a rounding error, as a fraction of the image.
+ * `ignore` areas (in image pixels) count toward neither and are greyed out in the diff.
+ */
+function compare(
+  a: ImageData,
+  b: ImageData,
+  ignore: readonly Rect[],
+): Comparison & { diff: ImageData } {
   if (a.width !== b.width || a.height !== b.height) {
     throw new Error(`screenshot sizes differ: ${a.width}x${a.height} vs ${b.width}x${b.height}`);
   }
+  const ignored = (x: number, y: number): boolean =>
+    ignore.some((r) => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height);
   const diff = new ImageData(a.width, a.height);
   let mismatch = 0;
+  let total = 0;
   for (let i = 0; i < a.data.length; i += 4) {
+    const pixel = i / 4;
+    if (ignored(pixel % a.width, Math.floor(pixel / a.width))) {
+      diff.data[i] = diff.data[i + 1] = diff.data[i + 2] = 120;
+      diff.data[i + 3] = 255;
+      continue;
+    }
+    total++;
     const delta = Math.max(
       Math.abs((a.data[i] ?? 0) - (b.data[i] ?? 0)),
       Math.abs((a.data[i + 1] ?? 0) - (b.data[i + 1] ?? 0)),
@@ -160,7 +180,6 @@ function compare(a: ImageData, b: ImageData): Comparison & { diff: ImageData } {
     diff.data[i + 2] = bad ? 0 : (a.data[i + 2] ?? 0) / 3 + 170;
     diff.data[i + 3] = 255;
   }
-  const total = a.width * a.height;
   return { mismatch, total, ratio: mismatch / total, diff };
 }
 
@@ -177,12 +196,14 @@ function toPng(image: ImageData): string {
 /**
  * Screenshot both stages and compare. On a mismatch beyond `tolerance`, the original, ours and a
  * red-marked diff are written to `__screenshots__/parity/` next to the test so a person can look.
+ * `ignore` names stage areas (CSS pixels) where the two are known to differ on purpose.
  */
 export async function expectVisualParity(
   name: string,
   original: HTMLElement,
   ours: HTMLElement,
   tolerance = 0.005,
+  ignore: readonly Rect[] = [],
 ): Promise<Comparison> {
   // One stage on screen at a time, so both rasterise at the same position; a hidden element
   // cannot be captured, so this has to be sequential.
@@ -194,7 +215,17 @@ export async function expectVisualParity(
   await frames(1);
   const b = await capture(ours);
   original.style.visibility = "visible";
-  const result = compare(a, b);
+  const scale = a.width / original.getBoundingClientRect().width;
+  const result = compare(
+    a,
+    b,
+    ignore.map((r) => ({
+      x: r.x * scale,
+      y: r.y * scale,
+      width: r.width * scale,
+      height: r.height * scale,
+    })),
+  );
   console.info(`parity ${name}: ${(result.ratio * 100).toFixed(3)}% of pixels differ`);
   if (result.ratio > tolerance) {
     const dir = `__screenshots__/parity/${name}`;

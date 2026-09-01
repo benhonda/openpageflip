@@ -10,6 +10,7 @@ import {
   PAGE,
   type Pos,
   pointer,
+  type Rect,
   sleep,
 } from "./visual/harness.ts";
 
@@ -49,7 +50,18 @@ type Scenario = {
   };
   settle?: number;
   tolerance?: number;
+  /** Stage areas left out of the comparison, each a deliberate difference listed in SPEC.md. */
+  ignore?: Rect[];
 };
+
+/**
+ * The original paints a hard page's shadow on the empty side of the stage when a cover opens or
+ * the lone last page closes; this library does not (SPEC.md, deliberate differences). What the
+ * pages themselves do on that side is compared elsewhere, over a page that is there to receive
+ * the shadow: `hard-middle-back` and `hard-forward-past-spine`.
+ */
+const EMPTY_LEFT: Rect = { x: 0, y: 0, width: PAGE.width, height: PAGE.height };
+const EMPTY_RIGHT: Rect = { x: PAGE.width, y: 0, width: PAGE.width, height: PAGE.height };
 
 /**
  * A drag as a pointer makes it: press, a first small move (the original decides direction and
@@ -109,12 +121,30 @@ const scenarios: Scenario[] = [
     stage: LANDSCAPE_STAGE,
     cover: true,
     drive: drag({ x: 470, y: 40 }, { x: 330, y: 100 }),
+    ignore: [EMPTY_LEFT],
   },
   {
     name: "cover-forward-hard-past-spine",
     stage: LANDSCAPE_STAGE,
     cover: true,
     drive: drag({ x: 470, y: 40 }, { x: 150, y: 100 }),
+    ignore: [EMPTY_LEFT],
+  },
+  {
+    name: "last-page-back-hard",
+    stage: LANDSCAPE_STAGE,
+    cover: true,
+    startPage: 5,
+    drive: drag({ x: 30, y: 40 }, { x: 180, y: 100 }),
+    ignore: [EMPTY_RIGHT],
+  },
+  {
+    name: "last-page-back-hard-past-spine",
+    stage: LANDSCAPE_STAGE,
+    cover: true,
+    startPage: 5,
+    drive: drag({ x: 30, y: 40 }, { x: 350, y: 100 }),
+    ignore: [EMPTY_RIGHT],
   },
   {
     name: "hard-middle-back",
@@ -122,6 +152,13 @@ const scenarios: Scenario[] = [
     hard: [2, 3],
     startPage: 2,
     drive: drag({ x: 30, y: 40 }, { x: 180, y: 120 }),
+  },
+  {
+    name: "hard-forward-past-spine",
+    stage: LANDSCAPE_STAGE,
+    hard: [2, 3],
+    startPage: 2,
+    drive: drag({ x: 470, y: 40 }, { x: 150, y: 100 }),
   },
   { name: "last-spread-rest", stage: LANDSCAPE_STAGE, startPage: 5 },
   { name: "portrait-rest", stage: PORTRAIT_STAGE },
@@ -187,7 +224,13 @@ describe("visual parity with page-flip@2.0.7", () => {
       const b = ours.stage.getBoundingClientRect();
       expect({ w: b.width, h: b.height }).toEqual({ w: a.width, h: a.height });
 
-      await expectVisualParity(scenario.name, original.stage, ours.stage, scenario.tolerance);
+      await expectVisualParity(
+        scenario.name,
+        original.stage,
+        ours.stage,
+        scenario.tolerance,
+        scenario.ignore,
+      );
     });
   }
 });

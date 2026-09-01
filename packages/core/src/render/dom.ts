@@ -224,7 +224,11 @@ export class DomRenderer {
       this.hideShadows();
     } else if (flippingHard) {
       this.hideSoftShadows();
-      this.drawHardShadows(flip.shadow, rect);
+      // A hard page's shadow falls on the page it lands on. A cover opens onto the empty side of
+      // the stage, and the lone last page closes onto it, so there the shadow has nothing to fall
+      // on and is skipped. The original painted it on the bare background.
+      const landing = flip.direction === FlipDirection.forward ? frame.left : frame.right;
+      this.drawHardShadows(flip.shadow, rect, landing !== null);
     } else {
       this.hideHardShadows();
       this.drawSoftShadows(flip.shadow, flip.fold.rect, rect);
@@ -383,16 +387,29 @@ export class DomRenderer {
     this.shadows.inner.style.cssText = `display: block; z-index: ${Z.shadow}; width: ${innerWidth}px; height: ${rect.height * 2}px; background: linear-gradient(${forward ? "to left" : "to right"}, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0.05) 15%, rgba(0, 0, 0, ${shadow.opacity}) 35%, rgba(0, 0, 0, 0) 100%); transform-origin: ${innerTranslate}px 100px; transform: translate3d(${at.x - innerTranslate}px, ${at.y - 100}px, 0) rotate(${angle}rad); clip-path: polygon(${innerClip});`;
   }
 
-  private drawHardShadows(shadow: ShadowData, rect: BookRect): void {
+  /**
+   * Two gradients at the spine. Until the page passes the spine, the inner one lies on the
+   * landing side and darkens as the page comes down, and the outer one lies under the lifting
+   * page; past the spine they trade places. `landingHasPage` is false when the landing side is
+   * empty, and the gradient that would sit there stays hidden.
+   */
+  private drawHardShadows(shadow: ShadowData, rect: BookRect, landingHasPage: boolean): void {
     const progress = shadow.progress > 100 ? 200 - shadow.progress : shadow.progress;
     const size = Math.min(rect.pageWidth, ((100 - progress) * (2.5 * rect.pageWidth)) / 100 + 20);
     const spine = rect.left + rect.width / 2;
     const flipped =
       (shadow.direction === FlipDirection.forward && shadow.progress > 100) ||
       (shadow.direction === FlipDirection.back && shadow.progress <= 100);
+    const pastSpine = shadow.progress > 100;
+    const showInner = landingHasPage || pastSpine;
+    const showOuter = landingHasPage || !pastSpine;
     const common = `display: block; width: ${size}px; height: ${rect.height}px; left: ${spine}px; top: ${rect.top}px; transform-origin: 0 0;`;
-    this.shadows.hardInner.style.cssText = `${common} z-index: ${Z.hardInnerShadow}; background: linear-gradient(to right, rgba(0, 0, 0, ${(shadow.opacity * progress) / 100}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? "" : " rotateY(180deg)"};`;
-    this.shadows.hardOuter.style.cssText = `${common} z-index: ${Z.hardShadow}; background: linear-gradient(to left, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? " rotateY(180deg)" : ""};`;
+    this.shadows.hardInner.style.cssText = showInner
+      ? `${common} z-index: ${Z.hardInnerShadow}; background: linear-gradient(to right, rgba(0, 0, 0, ${(shadow.opacity * progress) / 100}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? "" : " rotateY(180deg)"};`
+      : "display: none";
+    this.shadows.hardOuter.style.cssText = showOuter
+      ? `${common} z-index: ${Z.hardShadow}; background: linear-gradient(to left, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? " rotateY(180deg)" : ""};`
+      : "display: none";
   }
 
   private hideSoftShadows(): void {

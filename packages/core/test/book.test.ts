@@ -314,6 +314,45 @@ describe("options that switch behaviour off or change the layout", () => {
     expect(visible).toHaveLength(0);
   });
 
+  test("a hard page's shadow is drawn only where a page is there to receive it", () => {
+    const shadows = (container: HTMLElement): string[] =>
+      Array.from(container.querySelectorAll<HTMLElement>(".opf-shadow"))
+        .filter((el) => el.style.display !== "none")
+        .map((el) => el.className.replace(/.*--/, ""));
+
+    // A cover opens onto the empty left side: no shadow lands there, before or past the spine.
+    const cover = mount(500, { width: 250, height: 350, cover: true });
+    pointer(cover.container, "pointerdown", 470, 40);
+    pointer(cover.container, "pointermove", 330, 100);
+    expect(shadows(cover.container)).toEqual(["hard-outer"]);
+    pointer(cover.container, "pointermove", 150, 100);
+    expect(shadows(cover.container)).toEqual(["hard-inner"]);
+    pointer(cover.container, "pointercancel", 150, 100);
+
+    // The lone last page closes onto the empty right side, likewise.
+    const last = mount(500, { width: 250, height: 350, cover: true, startPage: 5 });
+    pointer(last.container, "pointerdown", 30, 40);
+    pointer(last.container, "pointermove", 180, 100);
+    expect(shadows(last.container)).toEqual(["hard-outer"]);
+    pointer(last.container, "pointermove", 350, 100);
+    expect(shadows(last.container)).toEqual(["hard-inner"]);
+    pointer(last.container, "pointercancel", 350, 100);
+
+    // A hard page in the middle of the book has a page on both sides: both shadows show.
+    const middle = stage(500);
+    middle.pages[3]?.setAttribute("data-density", "hard");
+    const book = createBook(middle.container, { width: 250, height: 350, startPage: 2 });
+    cleanup.push(() => {
+      book.destroy();
+      middle.stage.remove();
+    });
+    pointer(middle.container, "pointerdown", 470, 40);
+    pointer(middle.container, "pointermove", 330, 100);
+    expect(shadows(middle.container)).toEqual(["hard-outer", "hard-inner"]);
+    pointer(middle.container, "pointermove", 150, 100);
+    expect(shadows(middle.container)).toEqual(["hard-outer", "hard-inner"]);
+  });
+
   test("easing shapes the corner's path", async () => {
     const seen: number[] = [];
     const { book } = mount(500, {

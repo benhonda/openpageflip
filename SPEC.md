@@ -133,6 +133,9 @@ this library. These are the places where it was wrong and we did not copy it:
 - `flipPrev` aims at the book's left edge, not the container's (StPageFlip #29 / PR #30).
 - Hard pages and hard shadows are placed from the book rect, so they are right when the book is
   not flush with its container's top-left.
+- A hard page's shadow is drawn only on the side that has a page to receive it. The original
+  painted it on the bare stage when a cover opened or the lone last page closed. The parity
+  scenarios for those flips leave the empty side out of the comparison.
 - A page drawn hard for one flip (because its neighbour is hard) goes back to soft afterwards;
   the original left it hard.
 - `destroy()` stops the frame loop, restores every page's inline style and class, and removes
