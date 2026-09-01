@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": [
+    "scripts",
+    "vitest.config.ts",
+    "packages/*/tsdown.config.ts",
+    "packages/*/vitest.config.ts"
+  ],
+  "compilerOptions": {
+    "types": ["bun"],
+    "declaration": false,
+    "isolatedDeclarations": false
+  }
+}

@@ -1,0 +1,76 @@
+# Single entry point for everything that runs in this repo (see CLAUDE.md).
+version: "3"
+
+vars:
+  # Every workspace package, straight from the filesystem.
+  PKGS:
+    sh: ls -d packages/*
+
+tasks:
+  install:
+    desc: Install all workspace dependencies and the test browser
+    cmds:
+      - bun install
+      - bunx playwright install chromium
+
+  build:
+    desc: Build every package (ESM, IIFE for core, .d.ts, publint + attw checks)
+    cmds:
+      - for: { var: PKGS }
+        cmd: cd {{.ITEM}} && bunx tsdown
+
+  typecheck:
+    desc: Type-check every package and the repo tooling with tsc
+    cmds:
+      - bunx tsc -p tsconfig.json
+      - for: { var: PKGS }
+        cmd: bunx tsc -p {{.ITEM}}/tsconfig.json
+
+  lint:
+    desc: Lint and format-check with Biome
+    cmds:
+      - bunx biome check .
+
+  format:
+    desc: Apply Biome formatting and safe fixes
+    cmds:
+      - bunx biome check --write .
+
+  test:
+    desc: Run the browser test suites once
+    cmds:
+      - bunx vitest run
+
+  test:watch:
+    desc: Run the browser test suites in watch mode
+    cmds:
+      - bunx vitest
+
+  check:
+    desc: Everything CI runs. Run before reporting work as done.
+    cmds:
+      - task: lint
+      - task: typecheck
+      - task: build
+      - task: test
+
+  changeset:
+    desc: Record a changeset for the packages you touched
+    cmds:
+      - bunx changeset
+
+  version:
+    desc: Apply pending changesets to package versions and changelogs (release workflow)
+    cmds:
+      - bunx changeset version
+      - bun install
+
+  release:
+    desc: Publish packages whose version is not on npm yet (release workflow, OIDC)
+    cmds:
+      - bun scripts/release.ts
+
+  clean:
+    desc: Remove build output
+    cmds:
+      - rm -rf packages/*/dist
