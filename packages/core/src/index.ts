@@ -1,1 +1,2 @@
-export { Direction, FlipCorner, Layout, PageDensity } from "./options.ts";
+export * from "./geometry/index.ts";
+export { Direction, FlipCorner, FlipDirection, Layout, PageDensity } from "./options.ts";

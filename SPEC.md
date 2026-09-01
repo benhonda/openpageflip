@@ -68,8 +68,8 @@ a test and a docs page.
 
 0. **Scaffold and prove the release path.** Workspace, build, lint, tests, Changesets,
    CI, release workflow. Publish `0.0.x` shells so publishing is proven before real code.
-1. **Geometry kernel with parity fixtures.** Port the maths to strict TS with number
-   inputs and result values instead of thrown errors. Record the original's outputs for a
+1. **Geometry kernel with parity tests.** Port the maths to strict TS with number inputs
+   and result values instead of thrown errors. Run the vendored original next to it over a
    grid of drag positions and assert equality.
 2. **Headless controller, DOM renderer, input.** State machine, time-based tween with
    easing, rAF only while animating, dirty-checked renderer, Pointer Events,
@@ -84,9 +84,10 @@ a test and a docs page.
 
 - `[open]` Does the React wrapper own each page's element (`<Page>` wrapper div) or diff
   children by key onto user elements? Leaning owned: kills the forwardRef requirement.
-- `[open]` Where do parity fixtures come from: run the original in a browser under test
-  and record, or hand-copy the original source into `test/oracle/` as a dev-only vendored
-  copy? Leaning vendored oracle (MIT, ~4k lines, deleted after 1.0).
+- `[settled]` 2026-09-01: the parity oracle is the original's geometry source, vendored
+  dev-only under `packages/core/test/oracle/` and run live inside the browser test next to the
+  new kernel. No recorded JSON fixtures: the oracle is the single source of truth until it is
+  deleted after 1.0, at which point its outputs get snapshotted.
 - `[open]` Docs app in this repo (`apps/docs`) or a separate repo? Leaning in-repo, since
   it doubles as the browser-test fixture host.
 

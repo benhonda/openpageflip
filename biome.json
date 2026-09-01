@@ -7,7 +7,14 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!.agents", "!.claude", "!.devcontainer", "!skills-lock.json"]
+    "includes": [
+      "**",
+      "!.agents",
+      "!.claude",
+      "!.devcontainer",
+      "!skills-lock.json",
+      "!**/test/oracle"
+    ]
   },
   "formatter": {
     "enabled": true,

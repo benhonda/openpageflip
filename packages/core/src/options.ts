@@ -18,3 +18,7 @@ export type FlipCorner = (typeof FlipCorner)[keyof typeof FlipCorner];
 /** `hard` pages rotate as a rigid sheet (covers); `soft` pages bend along the fold. */
 export const PageDensity = { soft: "soft", hard: "hard" } as const;
 export type PageDensity = (typeof PageDensity)[keyof typeof PageDensity];
+
+/** Which way a page is turning: `forward` reads on, `back` returns to the previous spread. */
+export const FlipDirection = { forward: "forward", back: "back" } as const;
+export type FlipDirection = (typeof FlipDirection)[keyof typeof FlipDirection];
