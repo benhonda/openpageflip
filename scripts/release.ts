@@ -13,7 +13,13 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
 
-type Manifest = { name: string; version: string; private?: boolean };
+type Manifest = {
+  name: string;
+  version: string;
+  private?: boolean;
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+};
 
 function isManifest(value: unknown): value is Manifest {
   return (
@@ -52,12 +58,32 @@ const created: string[] = [];
 type Release = { cwd: string; version: string; tag: string };
 const releases: Release[] = [];
 
+type Package = { cwd: string; manifest: Manifest; dependsOn: string[] };
+const packages: Package[] = [];
 for (const dir of readdirSync(packagesDir)) {
   const cwd = join(packagesDir, dir);
   const manifest: unknown = await Bun.file(join(cwd, "package.json")).json();
   if (!isManifest(manifest)) throw new Error(`${dir}/package.json is missing name or version`);
   if (manifest.private) continue;
+  const dependsOn = Object.entries({ ...manifest.dependencies, ...manifest.peerDependencies })
+    .filter(([, range]) => range.startsWith("workspace:"))
+    .map(([name]) => name);
+  packages.push({ cwd, manifest, dependsOn });
+}
+// A package publishes after the workspace packages it depends on, so a consumer never sees a
+// version whose peer is not on the registry yet.
+const ordered: Package[] = [];
+while (ordered.length < packages.length) {
+  const next = packages.find(
+    (p) =>
+      !ordered.includes(p) &&
+      p.dependsOn.every((name) => ordered.some((o) => o.manifest.name === name)),
+  );
+  if (next === undefined) throw new Error("workspace dependency cycle among publishable packages");
+  ordered.push(next);
+}
 
+for (const { cwd, manifest } of ordered) {
   const tag = `${manifest.name}@${manifest.version}`;
   if (await isPublished(tag)) {
     console.log(`skip publish ${tag}: already on npm`);

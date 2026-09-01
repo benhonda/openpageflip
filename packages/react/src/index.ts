@@ -11,5 +11,5 @@ export type {
   Orientation,
   PageDensity,
 } from "@openpageflip/core";
-export { FlipBook, type FlipBookProps } from "./FlipBook.tsx";
+export { FlipBook, type FlipBookEventProps, type FlipBookProps } from "./FlipBook.tsx";
 export { Page, type PageProps } from "./Page.tsx";

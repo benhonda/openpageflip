@@ -26,8 +26,13 @@ export function attachInput(
   const onDown = (event: PointerEvent): void => {
     if (press !== null) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
-    if (event.target instanceof Element && event.target.closest(options.ignoreDragOn) !== null)
+    if (
+      options.ignoreDragOn !== false &&
+      event.target instanceof Element &&
+      event.target.closest(options.ignoreDragOn) !== null
+    ) {
       return;
+    }
     const start = local(event);
     press = { id: event.pointerId, start, startedAt: event.timeStamp };
     try {

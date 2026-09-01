@@ -7,10 +7,17 @@
 
 import type { Frame, ShadowData } from "../controller.ts";
 import { pageToContainer } from "../coords.ts";
-import type { Point } from "../geometry/point.ts";
+import type { Point, RectPoints } from "../geometry/point.ts";
 import { rotatePoint } from "../geometry/point.ts";
 import type { BookRect } from "../layout.ts";
-import { FlipDirection, Orientation, PageDensity, type ResolvedOptions } from "../options.ts";
+import {
+  FlipDirection,
+  Layout,
+  Orientation,
+  PageDensity,
+  type ResolvedOptions,
+  SizeMode,
+} from "../options.ts";
 import type { PageModel } from "../pages.ts";
 
 const Z = {
@@ -75,6 +82,8 @@ export class DomRenderer {
    * over it. The copy is inert, has no ids, and lives only for the duration of the flip.
    */
   private clone: { readonly source: HTMLElement; readonly element: HTMLElement } | null = null;
+  /** Pages currently hidden inline. A page is hidden once when it leaves the stage, not every frame. */
+  private hidden = new Set<number>();
 
   private readonly container: HTMLElement;
   private readonly options: SizingOptions;
@@ -104,6 +113,7 @@ export class DomRenderer {
       if (!pages.some((next) => next.element === page.element)) this.restore(page.element);
     }
     this.pages = pages;
+    this.hidden.clear();
     for (const page of pages) {
       if (this.saved.has(page.element)) continue;
       this.saved.set(page.element, {
@@ -119,22 +129,31 @@ export class DomRenderer {
   applyContainerSizing(orientation: Orientation = Orientation.landscape): void {
     const { autoSize, size, width, height, minWidth, maxWidth, layout } = this.options;
     if (!autoSize) return;
-    const pagesAcross = layout === "spread" ? 2 : 1;
+    // Narrowest: one page unless spreads are forced. Widest: two pages unless single is forced.
+    const minAcross = layout === Layout.spread ? 2 : 1;
+    const maxAcross = layout === Layout.single ? 1 : 2;
     const style = this.container.style;
     style.width = "100%";
-    style.minWidth = `${(size === "fixed" ? width : minWidth) * pagesAcross}px`;
-    style.maxWidth = `${(size === "fixed" ? width : maxWidth) * 2}px`;
+    style.minWidth = `${(size === SizeMode.fixed ? width : minWidth) * minAcross}px`;
+    style.maxWidth = `${(size === SizeMode.fixed ? width : maxWidth) * maxAcross}px`;
     style.aspectRatio =
       orientation === Orientation.portrait ? `${width} / ${height}` : `${width * 2} / ${height}`;
   }
 
   render(frame: Frame): void {
     const { rect, flip } = frame;
-    const active = new Set([frame.left, frame.right, flip?.flipping, flip?.bottom]);
+    const active = new Set<number>();
+    for (const index of [frame.left, frame.right, flip?.flipping, flip?.bottom]) {
+      if (index !== undefined && index !== null) active.add(index);
+    }
+    // Inline, because a page's own stylesheet (display: flex, say) would beat the class rule.
     for (const [index, page] of this.pages.entries()) {
-      if (!active.has(index)) applyPageStyle(page.element, { display: "none" });
-      page.element.classList.toggle(CLASS.hard, page.drawingDensity === PageDensity.hard);
-      page.element.classList.toggle(CLASS.soft, page.drawingDensity === PageDensity.soft);
+      if (active.has(index)) {
+        this.hidden.delete(index);
+      } else if (!this.hidden.has(index)) {
+        applyPageStyle(page.element, { display: "none" });
+        this.hidden.add(index);
+      }
     }
 
     const flippingHard =
@@ -218,6 +237,10 @@ export class DomRenderer {
     const page = this.pages[index];
     if (page === undefined) return null;
     const el = asClone ? this.cloneOf(page.element) : page.element;
+    // Re-asserted on every draw: a framework may have rewritten the class attribute since.
+    el.classList.add(CLASS.page);
+    el.classList.toggle(CLASS.hard, page.drawingDensity === PageDensity.hard);
+    el.classList.toggle(CLASS.soft, page.drawingDensity === PageDensity.soft);
     el.classList.toggle(CLASS.left, side === "left");
     el.classList.toggle(CLASS.right, side === "right");
     return el;
@@ -226,7 +249,9 @@ export class DomRenderer {
   private cloneOf(source: HTMLElement): HTMLElement {
     if (this.clone?.source === source) return this.clone.element;
     this.dropClone();
-    const element = source.cloneNode(true) as HTMLElement;
+    const element = source.cloneNode(true);
+    if (!(element instanceof HTMLElement))
+      throw new TypeError("@openpageflip/core: a page clone is not an element");
     element.removeAttribute("id");
     for (const el of element.querySelectorAll("[id]")) el.removeAttribute("id");
     element.setAttribute("aria-hidden", "true");
@@ -322,11 +347,7 @@ export class DomRenderer {
 
   // ---- shadows --------------------------------------------------------------------------------
 
-  private drawSoftShadows(
-    shadow: ShadowData,
-    pageRect: Frame["flip"] extends null ? never : NonNullable<Frame["flip"]>["fold"]["rect"],
-    rect: BookRect,
-  ): void {
+  private drawSoftShadows(shadow: ShadowData, pageRect: RectPoints, rect: BookRect): void {
     const forward = shadow.direction === FlipDirection.forward;
     const at = pageToContainer(shadow.pos, rect, shadow.direction);
     const angle = shadow.angle + (3 * Math.PI) / 2;
@@ -400,6 +421,7 @@ export class DomRenderer {
   /** Put the container and every page back the way they were found. */
   destroy(): void {
     this.dropClone();
+    this.hidden.clear();
     for (const page of this.pages) this.restore(page.element);
     this.pages = [];
     for (const el of Object.values(this.shadows)) el.remove();

@@ -135,6 +135,30 @@ describe("FlipBook", () => {
     expect(book.current?.page).toBe(2);
   });
 
+  test("a changed className on a Page keeps the book's own classes", async () => {
+    function Renamed() {
+      const [name, setName] = useState("first");
+      return (
+        <Stage>
+          <button type="button" onClick={() => setName("second")}>
+            rename
+          </button>
+          <FlipBook width={250} height={350}>
+            <Page className={name}>a</Page>
+            <Page>b</Page>
+          </FlipBook>
+        </Stage>
+      );
+    }
+    const screen = await render(<Renamed />);
+    const first = screen.container.querySelector<HTMLElement>(".first");
+    expect(first?.classList.contains("opf-page")).toBe(true);
+    await screen.getByRole("button", { name: "rename" }).click();
+    expect(first?.classList.contains("second")).toBe(true);
+    expect(first?.classList.contains("opf-page")).toBe(true);
+    expect(first?.classList.contains("opf-page--left")).toBe(true);
+  });
+
   test("a page's own inline style and class survive a flip", async () => {
     const book = createRef<Book>();
     const screen = await render(
@@ -167,11 +191,15 @@ describe("FlipBook", () => {
         </FlipBook>
       </Stage>,
     );
-    const container = screen.container.querySelector(".opf-book");
-    expect(container).not.toBeNull();
+    const container =
+      screen.container.querySelector<HTMLElement>("[data-opf-page]")?.parentElement ?? null;
+    expect(container?.classList.contains("opf-book")).toBe(true);
     expect(book.current?.state).toBe(FlipState.read);
+    const handle = book.current;
     await screen.unmount();
-    expect(document.querySelector(".opf-book")).toBeNull();
-    expect(document.querySelector(".opf-shadow")).toBeNull();
+    // The core restored the element it was given, and the handle knows the book is gone.
+    expect(container?.classList.contains("opf-book")).toBe(false);
+    expect(container?.querySelector(".opf-shadow")).toBeNull();
+    expect(() => handle?.page).toThrow(/not mounted/);
   });
 });

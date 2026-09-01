@@ -7,10 +7,6 @@
 export const Layout = { auto: "auto", single: "single", spread: "spread" } as const;
 export type Layout = (typeof Layout)[keyof typeof Layout];
 
-/** Reading direction. `rtl` flips the spine to the right for manga and Hebrew/Arabic books. */
-export const Direction = { ltr: "ltr", rtl: "rtl" } as const;
-export type Direction = (typeof Direction)[keyof typeof Direction];
-
 /** Which corner a programmatic flip lifts. */
 export const FlipCorner = { top: "top", bottom: "bottom" } as const;
 export type FlipCorner = (typeof FlipCorner)[keyof typeof FlipCorner];
@@ -90,8 +86,12 @@ export type BookOptions = {
   readonly swipeDistance?: number;
   /** Lift a corner when the mouse hovers over it. @default true */
   readonly hoverCorners?: boolean;
-  /** Pointer events starting on an element matching this selector never start a flip. */
-  readonly ignoreDragOn?: string;
+  /**
+   * Pointer events starting on an element matching this selector never start a flip.
+   * `false` turns this off.
+   * @default "a, button, input, textarea, select, [data-opf-no-flip]"
+   */
+  readonly ignoreDragOn?: string | false;
   /** Page elements. @default the container's children */
   readonly pages?: Iterable<HTMLElement>;
 };
@@ -119,7 +119,7 @@ const DEFAULTS: Omit<ResolvedOptions, "width" | "height"> = {
 };
 
 function isOneOf<T extends string>(vocabulary: Record<string, T>, value: unknown): value is T {
-  return Object.values(vocabulary).includes(value as T);
+  return Object.values(vocabulary).some((allowed) => allowed === value);
 }
 
 /** Fill in defaults and reject options that could only produce a broken book. */
@@ -160,6 +160,15 @@ export function resolveOptions(user: BookOptions): ResolvedOptions {
     throw new TypeError(
       `@openpageflip/core: "startPage" must be a non-negative integer, got ${options.startPage}`,
     );
+  }
+  if (options.ignoreDragOn !== false) {
+    try {
+      document.createElement("div").matches(options.ignoreDragOn);
+    } catch {
+      throw new TypeError(
+        `@openpageflip/core: "ignoreDragOn" is not a valid selector: ${options.ignoreDragOn}`,
+      );
+    }
   }
   return options;
 }

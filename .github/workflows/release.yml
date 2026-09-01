@@ -2,7 +2,8 @@ name: Release
 
 # Every push to main that carries changesets becomes a release, with no human step:
 # check → bump versions and changelogs → commit them back → publish with provenance → tag → GitHub release.
-# A push to main without changesets runs the check and stops at "nothing to publish".
+# Publish, tag and release are each skipped when already done (see scripts/release.ts), so a push
+# without changesets only checks, and a rerun finishes whatever an earlier run left undone.
 on:
   push:
     branches: [main]

@@ -133,6 +133,53 @@ describe("FlipController", () => {
     expect(controller.currentState).toBe(FlipState.flipping);
   });
 
+  test("flipTo during a running flip lands it first, then aims from there", async () => {
+    const { controller, manual } = setup();
+    void controller.flipNext(FlipCorner.top);
+    manual.advance(16);
+    const promise = controller.flipTo(5, FlipCorner.top);
+    // The first flip landed on spread [2, 3]; the second aims at [4, 5], one turn away.
+    expect(await settle(promise, manual)).toBe(true);
+    expect(controller.page).toBe(4);
+  });
+
+  test("a press during a flip lands it, and the drag that follows starts from the settled book", () => {
+    const { controller, manual, last } = setup();
+    void controller.flipNext(FlipCorner.top);
+    manual.advance(16);
+    controller.pointerDown({ x: 470, y: 40 });
+    expect(controller.page).toBe(2);
+    expect(controller.currentState).toBe(FlipState.read);
+    controller.pointerDrag({ x: 330, y: 120 });
+    expect(controller.currentState).toBe(FlipState.userFold);
+    expect(last().flip?.flipping).toBe(4);
+  });
+
+  test("with drag off, a long press-and-move neither folds nor clicks", () => {
+    const { controller, last } = setup({ drag: false });
+    controller.pointerDown({ x: 470, y: 40 });
+    controller.pointerDrag({ x: 200, y: 120 });
+    expect(last().flip).toBeNull();
+    controller.pointerUp({ x: 200, y: 120 });
+    expect(controller.currentState).toBe(FlipState.read);
+    expect(controller.page).toBe(0);
+  });
+
+  test("turnTo out of range throws instead of doing nothing", () => {
+    const { controller } = setup();
+    expect(() => controller.showPage(42)).toThrow(RangeError);
+  });
+
+  test("a resize mid-drag drops the fold, which was computed for the old page size", () => {
+    const { controller, last } = setup({ size: "stretch" });
+    controller.pointerDown({ x: 470, y: 40 });
+    controller.pointerDrag({ x: 330, y: 120 });
+    expect(last().flip).not.toBeNull();
+    const options = resolveOptions({ width: 250, height: 350, size: "stretch" });
+    controller.setLayout(computeLayout(600, 420, options));
+    expect(last().flip).toBeNull();
+  });
+
   test("flipTo jumps beside the target and animates the last turn", async () => {
     const { controller, manual, shown } = setup();
     expect(await settle(controller.flipTo(5, FlipCorner.bottom), manual)).toBe(true);

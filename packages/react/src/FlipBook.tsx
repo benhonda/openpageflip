@@ -22,12 +22,12 @@ import {
 import { Page, type PageProps } from "./Page.tsx";
 
 /** `onFlip`, `onChangeState`, ... one prop per core event, typed from the core's event map. */
-type EventProps = {
+export type FlipBookEventProps = {
   [K in keyof BookEvents as `on${Capitalize<K>}`]?: (event: BookEvents[K]) => void;
 };
 
 export type FlipBookProps = Omit<BookOptions, "pages"> &
-  EventProps & {
+  FlipBookEventProps & {
     /** The book's API, available from the moment the component mounts. */
     ref?: Ref<Book>;
     /** Each child is a page. Use `Page` to mark hard pages or style the page element. */
@@ -141,7 +141,7 @@ export function FlipBook({
     if (book === null || el === null) return;
     const pages = collectPages(el);
     if (sameElements(pages, pagesRef.current)) {
-      book.update();
+      book.redraw();
       return;
     }
     pagesRef.current = pages;
@@ -195,6 +195,7 @@ function handleFor(bookRef: { current: Book | null }): Book {
     turnPrev: () => live().turnPrev(),
     setPages: (pages) => live().setPages(pages),
     update: () => live().update(),
+    redraw: () => live().redraw(),
     destroy: () => live().destroy(),
   };
 }

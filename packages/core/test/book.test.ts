@@ -86,6 +86,9 @@ describe("createBook", () => {
     expect(() => createBook(container, { width: 250, height: 350, startPage: 9 })).toThrow(
       /out of range/,
     );
+    expect(() => createBook(container, { width: 250, height: 350, ignoreDragOn: "a[" })).toThrow(
+      /not a valid selector/,
+    );
   });
 
   test("lays out the container's children as pages and sizes the container", () => {
@@ -212,6 +215,142 @@ describe("createBook", () => {
     expect(await book.flipPrev("bottom")).toBe(true);
     expect(book.page).toBe(0);
     expect(await book.flipPrev()).toBe(false);
+  });
+});
+
+describe("options that switch behaviour off or change the layout", () => {
+  test("swipe: false leaves a quick horizontal swipe alone", async () => {
+    const { book, container } = mount(500, {
+      width: 250,
+      height: 350,
+      flipDuration: 40,
+      swipe: false,
+    });
+    pointer(container, "pointerdown", 400, 100);
+    pointer(container, "pointermove", 300, 100);
+    pointer(container, "pointerup", 300, 100);
+    await new Promise((r) => setTimeout(r, 120));
+    expect(book.page).toBe(0);
+  });
+
+  test("hoverCorners: false never lifts a corner on hover", () => {
+    const { book, container } = mount(500, { width: 250, height: 350, hoverCorners: false });
+    pointer(container, "pointermove", 470, 30, { buttons: 0, button: -1 });
+    expect(book.state).toBe(FlipState.read);
+  });
+
+  test("click: 'off' ignores clicks but still allows a drag", async () => {
+    const { book, container } = mount(500, {
+      width: 250,
+      height: 350,
+      flipDuration: 40,
+      click: "off",
+    });
+    pointer(container, "pointerdown", 470, 40);
+    pointer(container, "pointerup", 470, 40);
+    expect(book.state).toBe(FlipState.read);
+    pointer(container, "pointerdown", 470, 40);
+    pointer(container, "pointermove", 100, 90);
+    expect(book.state).toBe(FlipState.userFold);
+    pointer(container, "pointerup", 100, 90);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(book.page).toBe(2);
+  });
+
+  test("ignoreDragOn takes a custom selector, and false turns it off", async () => {
+    const custom = mount(500, { width: 250, height: 350, flipDuration: 40, ignoreDragOn: ".keep" });
+    const keep = document.createElement("span");
+    keep.className = "keep";
+    keep.style.cssText = "position: absolute; right: 4px; top: 4px;";
+    custom.pages[1]?.append(keep);
+    pointer(keep, "pointerdown", 490, 10);
+    pointer(keep, "pointerup", 490, 10);
+    expect(custom.book.state).toBe(FlipState.read);
+
+    const off = mount(500, { width: 250, height: 350, flipDuration: 40, ignoreDragOn: false });
+    const link = document.createElement("a");
+    link.href = "#x";
+    link.style.cssText = "position: absolute; right: 4px; top: 4px;";
+    off.pages[1]?.append(link);
+    pointer(link, "pointerdown", 490, 10);
+    pointer(link, "pointerup", 490, 10);
+    expect(off.book.state).toBe(FlipState.flipping);
+  });
+
+  test("layout: 'single' shows one page in a wide container; 'spread' shows two in a narrow one", () => {
+    const single = mount(500, { width: 250, height: 350, layout: "single" });
+    expect(single.book.orientation).toBe(Orientation.portrait);
+    expect(single.container.getBoundingClientRect().width).toBe(250);
+    const spread = mount(300, { width: 250, height: 350, layout: "spread" });
+    expect(spread.book.orientation).toBe(Orientation.landscape);
+    expect(spread.container.getBoundingClientRect().width).toBe(500);
+  });
+
+  test("size: 'stretch' fills the container and keeps the page ratio", () => {
+    const { book, container } = mount(700, {
+      width: 250,
+      height: 350,
+      size: "stretch",
+      maxWidth: 400,
+    });
+    expect(container.getBoundingClientRect().width).toBe(700);
+    expect(book.rect.pageWidth).toBe(350);
+    expect(book.rect.height).toBe(490);
+  });
+
+  test("autoSize: false leaves the container's size to its own CSS", () => {
+    const { container } = mount(500, { width: 250, height: 350, autoSize: false });
+    expect(container.style.width).toBe("");
+    expect(container.style.aspectRatio).toBe("");
+  });
+
+  test("shadows: false draws no shadow during a drag", () => {
+    const { container } = mount(500, { width: 250, height: 350, shadows: false });
+    pointer(container, "pointerdown", 470, 40);
+    pointer(container, "pointermove", 330, 120);
+    const visible = Array.from(container.querySelectorAll<HTMLElement>(".opf-shadow")).filter(
+      (el) => el.style.display !== "none",
+    );
+    expect(visible).toHaveLength(0);
+  });
+
+  test("easing shapes the corner's path", async () => {
+    const seen: number[] = [];
+    const { book } = mount(500, {
+      width: 250,
+      height: 350,
+      flipDuration: 60,
+      easing: (t) => {
+        seen.push(t);
+        return t * t;
+      },
+    });
+    await book.flipNext();
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((t) => t >= 0 && t < 1)).toBe(true);
+  });
+
+  test("off and an AbortSignal both stop a listener, even one attached with an aborted signal", () => {
+    const { book } = mount();
+    const calls: number[] = [];
+    const listener = (e: { page: number }) => calls.push(e.page);
+    book.on("flip", listener);
+    book.off("flip", listener);
+    const controller = new AbortController();
+    book.on("flip", listener, { signal: controller.signal });
+    controller.abort();
+    book.on("flip", listener, { signal: AbortSignal.abort() });
+    book.turnNext();
+    expect(calls).toEqual([]);
+  });
+
+  test("redraw re-applies the book's classes after they were rewritten", () => {
+    const { book, pages } = mount();
+    const first = pages[0] as HTMLElement;
+    first.className = "my-page";
+    book.redraw();
+    expect(first.classList.contains("opf-page")).toBe(true);
+    expect(first.classList.contains("my-page")).toBe(true);
   });
 });
 

@@ -44,7 +44,8 @@ export function startTween(clock: Clock, spec: TweenSpec): Tween {
   const tick = (time: number): void => {
     handle = null;
     if (done) return;
-    const t = spec.duration <= 0 ? 1 : Math.min(1, (time - startedAt) / spec.duration);
+    // A frame's timestamp can precede the moment the tween started, so clamp from below too.
+    const t = spec.duration <= 0 ? 1 : Math.min(1, Math.max(0, (time - startedAt) / spec.duration));
     if (t >= 1) {
       end();
       return;

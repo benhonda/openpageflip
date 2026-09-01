@@ -26,8 +26,9 @@ export function createEmitter<Events extends Record<string, unknown>>(): Emitter
         set = new Set();
         listeners.set(name, set);
       }
-      set.add(listener as Listener<never>);
       const unsubscribe = () => off(name, listener);
+      if (options?.signal?.aborted) return unsubscribe;
+      set.add(listener as Listener<never>);
       options?.signal?.addEventListener("abort", unsubscribe, { once: true });
       return unsubscribe;
     },

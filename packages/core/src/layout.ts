@@ -12,7 +12,7 @@ export type BookRect = {
 
 export type LayoutResult = { readonly orientation: Orientation; readonly rect: BookRect };
 
-type LayoutOptions = Pick<
+export type LayoutOptions = Pick<
   ResolvedOptions,
   "size" | "width" | "height" | "minWidth" | "maxWidth" | "layout"
 >;

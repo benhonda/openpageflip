@@ -47,12 +47,10 @@ export type Book = {
 
   /** Replace the page elements. Keeps the current page where possible. */
   setPages(pages: Iterable<HTMLElement>): void;
-  /**
-   * Re-measure the container and redraw. Resizes are handled automatically; call this after
-   * other changes to the container or pages (a framework re-render, a swapped class name).
-   * Cheap enough to call after every render of a wrapping component.
-   */
+  /** Re-measure the container and redraw. Resizes are handled automatically; call this after other layout changes. */
   update(): void;
+  /** Redraw the current frame without measuring, after something else rewrote page attributes. Cheap. */
+  redraw(): void;
   /** Stop everything, drop listeners and observers, and restore the DOM. */
   destroy(): void;
 };
@@ -130,7 +128,7 @@ export function createBook(container: HTMLElement, userOptions: CreateBookOption
   let pendingRelayout: number | null = null;
   const observer = new ResizeObserver(() => {
     if (pendingRelayout !== null) return;
-    pendingRelayout = requestAnimationFrame(() => {
+    pendingRelayout = clock.requestFrame(() => {
       pendingRelayout = null;
       const size = { width: container.clientWidth, height: container.clientHeight };
       if (size.width === lastSize.width && size.height === lastSize.height) return;
@@ -181,9 +179,10 @@ export function createBook(container: HTMLElement, userOptions: CreateBookOption
       emitter.emit("update", { page: controller.page, orientation: controller.currentOrientation });
     },
     update: relayout,
+    redraw: () => controller.redraw(),
     destroy() {
       observer.disconnect();
-      if (pendingRelayout !== null) cancelAnimationFrame(pendingRelayout);
+      if (pendingRelayout !== null) clock.cancelFrame(pendingRelayout);
       detachInput();
       controller.destroy();
       renderer.destroy();

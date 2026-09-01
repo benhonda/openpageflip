@@ -150,8 +150,12 @@ export class FlipController {
 
   /** Returns true when the orientation changed, which re-paginates the book. */
   setLayout(layout: LayoutResult): boolean {
+    const resized =
+      layout.rect.pageWidth !== this.rect.pageWidth || layout.rect.height !== this.rect.height;
     this.rect = layout.rect;
     const orientationChanged = layout.orientation !== this.orientation;
+    // A fold is computed for one page size; when that changes mid-flip the fold is dropped.
+    if (resized && !orientationChanged) this.endSession();
     if (orientationChanged) {
       this.endSession();
       this.orientation = layout.orientation;
@@ -180,7 +184,11 @@ export class FlipController {
 
   showPage(page: number): void {
     const index = spreadIndexOfPage(this.spreads, page);
-    if (index === null) return;
+    if (index === null) {
+      throw new RangeError(
+        `@openpageflip/core: page ${page} is out of range (0..${this.pages.length - 1})`,
+      );
+    }
     this.spreadIndex = index;
     this.showSpread();
   }
@@ -238,6 +246,8 @@ export class FlipController {
    * The static pages keep showing the current spread until that turn lands.
    */
   flipTo(page: number, corner: FlipCorner): Promise<boolean> {
+    // A running flip lands first, so the target is measured from where the book actually is.
+    this.tween?.finish();
     const target = spreadIndexOfPage(this.spreads, page);
     if (target === null || target === this.spreadIndex) return Promise.resolve(false);
     if (target > this.spreadIndex) {
@@ -361,15 +371,19 @@ export class FlipController {
   }
 
   pointerDown(containerPos: Point): void {
+    // Pressing during a flip lands it; the press then acts on the settled book.
+    if (this.state === FlipState.flipping) this.tween?.finish();
     this.pressStart = containerPos;
     this.dragged = false;
   }
 
   /** A pressed pointer moved. Starts a drag once it travels past the click threshold. */
   pointerDrag(containerPos: Point): void {
-    if (this.pressStart === null || !this.options.drag) return;
+    if (this.pressStart === null) return;
     if (!this.dragged && distance(this.pressStart, containerPos) <= DRAG_THRESHOLD) return;
+    // A press that travelled is a drag even when dragging is off: releasing it must not click.
     this.dragged = true;
+    if (!this.options.drag) return;
     // Direction and corner come from where the press started, so a fast drag across the spine
     // cannot flip the wrong way. (The original decided from the first move instead.)
     const session = this.session ?? this.start(this.pressStart);
@@ -556,6 +570,11 @@ export class FlipController {
             }
           : null,
     };
+  }
+
+  /** Hand the current frame to the renderer again, after something else touched the DOM. */
+  redraw(): void {
+    this.render();
   }
 
   private render(): void {
