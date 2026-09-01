@@ -28,8 +28,8 @@ Every direct child of `FlipBook` is a page. `Page` marks the hard ones and puts 
 
 - Every option of the core package is a prop. Changing one rebuilds the book on the same page. Children can change freely.
 - `ref` gives you the core `Book`: `flipNext`, `flipTo`, `page`, `on` and the rest.
-- `page` makes the book controlled, and `onFlip` reports the first page of the spread that landed. See the [controlled page example](/openpageflip/examples/controlled-page/).
+- `page` makes the book controlled, and `onFlip` reports the first page of the spread that landed. See the [controlled page example](/examples/controlled-page/).
 - Each core event is a prop: `onInit`, `onUpdate`, `onFlip`, `onChangeState`, `onChangeOrientation`.
 - The component ships with `"use client"` and renders on the server. The demo above was server-rendered by this site, then hydrated.
 
-Every prop is described in the [reference](/openpageflip/api/openpageflip/react/), straight from the source.
+Every prop is described in the [reference](/api/openpageflip/react/), straight from the source.

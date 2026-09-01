@@ -8,18 +8,14 @@ import starlightLinksValidator from "starlight-links-validator";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 import { workspaceAlias } from "../../workspace-alias.ts";
 
-// The repository is the single source for where the site lives: GitHub Pages serves
-// `https://<owner>.github.io/<repo>/`. A custom domain later means changing only these two lines.
-const [owner, repo] = new URL(corePkg.repository.url.replace(/^git\+/, "")).pathname
-  .replace(/^\/|\.git$/g, "")
-  .split("/");
-const repoUrl = `https://github.com/${owner}/${repo}`;
+const repoUrl = corePkg.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
+
+// Vercel hosts the site at the root of its production domain and tells the build which one.
+// Locally there is no `site`, so canonical URLs and the sitemap are only produced on Vercel.
+const productionUrl = process.env["VERCEL_PROJECT_PRODUCTION_URL"];
 
 export default defineConfig({
-  site: `https://${owner}.github.io`,
-  // Links inside content spell this base out (Astro does not rewrite them); the links validator
-  // fails the build for any that stop matching.
-  base: `/${repo}`,
+  ...(productionUrl === undefined ? {} : { site: `https://${productionUrl}` }),
   // Examples and the reference come from packages/*/src, the same way the tests resolve them.
   vite: { resolve: { alias: workspaceAlias } },
   integrations: [
@@ -50,6 +46,13 @@ export default defineConfig({
           sidebar: { label: "Reference" },
           // `astro dev` regenerates the reference when a package source changes.
           watch: process.argv.includes("dev"),
+          typeDoc: {
+            // "View source" links point at main on GitHub without asking git, which hosted
+            // builds clone without a usable remote. Without git, `{path}` is relative to the
+            // entry points' common directory, `packages/`.
+            disableGit: true,
+            sourceLinkTemplate: `${repoUrl}/blob/main/packages/{path}#L{line}`,
+          },
         }),
         starlightChangelogs(),
         // Internal links, including those into the generated reference, are checked at build time.
