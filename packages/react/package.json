@@ -1,0 +1,45 @@
+{
+  "name": "@openpageflip/react",
+  "version": "0.0.0",
+  "description": "React 19 bindings for @openpageflip/core. Successor to react-pageflip.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/benhonda/openpageflip.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/benhonda/openpageflip#readme",
+  "bugs": "https://github.com/benhonda/openpageflip/issues",
+  "keywords": [
+    "react",
+    "page-flip",
+    "flipbook",
+    "book",
+    "page turn",
+    "react-pageflip"
+  ],
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@openpageflip/core": "workspace:^",
+    "react": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  }
+}

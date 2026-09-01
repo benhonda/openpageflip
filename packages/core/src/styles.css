@@ -1,0 +1,22 @@
+/*
+ * @openpageflip/core stylesheet. Import it once: `import "@openpageflip/core/styles.css"`.
+ * Theming is through the custom properties below; set them on the host element.
+ */
+.opf-book {
+  --opf-flip-duration: 800ms;
+  --opf-shadow-opacity: 1;
+
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  /* Vertical page scroll stays native; horizontal drags belong to the book. */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .opf-book {
+    --opf-flip-duration: 0ms;
+  }
+}
