@@ -1,10 +1,8 @@
 # @openpageflip/react
 
-React 19 bindings for [`@openpageflip/core`](https://www.npmjs.com/package/@openpageflip/core). Successor to
-[`react-pageflip`](https://www.npmjs.com/package/react-pageflip).
+React 19 bindings for [`@openpageflip/core`](https://www.npmjs.com/package/@openpageflip/core). Successor to [`react-pageflip`](https://www.npmjs.com/package/react-pageflip).
 
-Pre-1.0 and under construction. The plan, decisions and status live in the
-[repository's SPEC.md](https://github.com/benhonda/openpageflip/blob/main/SPEC.md).
+Pre-1.0 and under construction. The plan, decisions and status live in the [repository's SPEC.md](https://github.com/benhonda/openpageflip/blob/main/SPEC.md).
 
 ```sh
 bun add @openpageflip/core @openpageflip/react
