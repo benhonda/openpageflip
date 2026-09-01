@@ -3,8 +3,9 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   entry: "src/index.ts",
   platform: "browser",
-  // ESM for bundlers, IIFE for a CDN <script> tag (window.OpenPageFlip).
-  format: ["esm", "iife"],
+  // ESM for bundlers (left readable; their bundler minifies), IIFE minified for a CDN <script>
+  // tag (window.OpenPageFlip).
+  format: { esm: {}, iife: { minify: true } },
   globalName: "OpenPageFlip",
   dts: true,
   sourcemap: true,
