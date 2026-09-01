@@ -1,14 +1,18 @@
 name: Release
 
+# Every push to main that carries changesets becomes a release, with no human step:
+# check → bump versions and changelogs → commit them back → publish with provenance → tag → GitHub release.
+# A push to main without changesets runs the check and stops at "nothing to publish".
 on:
   push:
     branches: [main]
 
-concurrency: release-${{ github.ref }}
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
   contents: write
-  pull-requests: write
   id-token: write # npm Trusted Publishing (OIDC); no npm token is stored anywhere
 
 jobs:
@@ -29,13 +33,23 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: bun install --frozen-lockfile
-      - run: task build
-      - name: Open the version PR, or publish if it was just merged
-        uses: changesets/action@v1
-        with:
-          version: task version
-          publish: task release
-          title: "Version packages"
-          commit: "Version packages"
+      - run: bunx playwright install --with-deps chromium
+      - name: Nothing red ships
+        run: task check
+      - name: Apply changesets and commit the versions back
+        run: |
+          if ls .changeset/*.md 2>/dev/null | grep -qv README.md; then
+            task version
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "release: version packages"
+            git push
+          else
+            echo "no changesets: nothing to version"
+          fi
+      - name: Publish, tag, and create GitHub releases
+        run: task release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+      - run: git push --tags

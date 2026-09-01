@@ -1,13 +1,13 @@
 /**
- * Publishes every public workspace package whose local version is not on npm yet.
+ * Publishes every public workspace package whose local version is not on npm yet, tags each
+ * one, and (in GitHub Actions) creates a GitHub release from its changelog entry.
  *
  * Why not `changeset publish` or `bun publish`: Changesets 3 cannot drive Bun, and
  * `bun publish` cannot do npm Trusted Publishing (oven-sh/bun#22423). So we pack with Bun
  * (which rewrites `workspace:` and `catalog:` ranges) and publish the tarball with npm,
- * which attaches provenance automatically under GitHub OIDC. Tags come from
- * `changeset git-tag`; the "New tag:" lines let changesets/action create GitHub releases.
+ * which attaches provenance automatically under GitHub OIDC.
  */
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
 
@@ -30,8 +30,21 @@ async function isPublished(spec: string): Promise<boolean> {
   throw new Error(`npm view ${spec} failed:\n${result.stderr.toString()}`);
 }
 
+/** The `## <version>` section of a Changesets changelog, or a pointer to it when absent. */
+async function releaseNotes(cwd: string, version: string): Promise<string> {
+  const fallback = `See CHANGELOG.md for ${version}.`;
+  const path = join(cwd, "CHANGELOG.md");
+  if (!existsSync(path)) return fallback;
+  const changelog = await Bun.file(path).text();
+  const section = changelog
+    .split(/^## /m)
+    .slice(1)
+    .find((candidate) => candidate.split("\n")[0]?.trim() === version);
+  return section === undefined ? fallback : section.slice(section.indexOf("\n")).trim() || fallback;
+}
+
 const packagesDir = join(import.meta.dir, "..", "packages");
-const published: string[] = [];
+const published: { spec: string; cwd: string; version: string }[] = [];
 
 for (const dir of readdirSync(packagesDir)) {
   const cwd = join(packagesDir, dir);
@@ -52,12 +65,17 @@ for (const dir of readdirSync(packagesDir)) {
   );
   await $`bun pm pack --filename ${tarball}`.cwd(cwd);
   await $`npm publish ${tarball} --access public`.cwd(cwd);
-  published.push(spec);
+  published.push({ spec, cwd, version: manifest.version });
 }
 
-if (published.length > 0) {
-  await $`bunx changeset git-tag`;
-  for (const spec of published) console.log(`New tag: ${spec}`);
-} else {
+if (published.length === 0) {
   console.log("nothing to publish");
+} else {
+  await $`bunx changeset git-tag`;
+  for (const { spec, cwd, version } of published) {
+    console.log(`New tag: ${spec}`);
+    if (process.env["GITHUB_ACTIONS"] !== "true") continue;
+    const notes = await releaseNotes(cwd, version);
+    await $`gh release create ${spec} --title ${spec} --notes ${notes}`;
+  }
 }

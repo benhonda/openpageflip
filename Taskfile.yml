@@ -60,13 +60,13 @@ tasks:
       - bunx changeset
 
   version:
-    desc: Apply pending changesets to package versions and changelogs (release workflow)
+    desc: Apply pending changesets to versions and changelogs (the release workflow runs this)
     cmds:
       - bunx changeset version
       - bun install
 
   release:
-    desc: Publish packages whose version is not on npm yet (release workflow, OIDC)
+    desc: Publish unpublished versions, tag them, create GitHub releases (the release workflow runs this)
     cmds:
       - bun scripts/release.ts
 
