@@ -59,20 +59,44 @@ tasks:
       - task: docs:build
       - task: test
 
-  docs:dev:
-    desc: Serve the docs site with live reload; the API reference regenerates on package source changes
+  # Dev servers: one dir-scoped task per app plus a bare picker, so a second app is a pure
+  # addition (adpharm-stack, `per-app-picker`). The docs site is the only app, and the demo.
+  start:docs:
+    aliases: [dev:docs]
+    desc: Serve the docs site and demo with live reload; the API reference regenerates on package source changes
+    dir: apps/docs
+    interactive: true
     cmds:
-      - cd apps/docs && bunx astro dev
+      - bunx astro dev
+
+  start:
+    aliases: [dev]
+    desc: Start an app's dev server (interactive app picker)
+    interactive: true
+    silent: true
+    cmds:
+      - |
+        echo "Start which app?"
+        select app in docs quit; do
+          case "$app" in
+            docs) exec task start:docs ;;
+            quit) break ;;
+            *) echo "invalid" ;;
+          esac
+        done
 
   docs:build:
     desc: Build the docs site (generates the API reference from packages/*/src into apps/docs/dist)
+    dir: apps/docs
     cmds:
-      - cd apps/docs && bunx astro build
+      - bunx astro build
 
   docs:preview:
     desc: Serve the built docs site
+    dir: apps/docs
+    interactive: true
     cmds:
-      - cd apps/docs && bunx astro preview
+      - bunx astro preview
 
   docs:readme:
     desc: "Embed the docs examples into package READMEs (task docs:readme -- --check only verifies)"

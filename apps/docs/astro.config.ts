@@ -16,6 +16,9 @@ const productionUrl = process.env["VERCEL_PROJECT_PRODUCTION_URL"];
 
 export default defineConfig({
   ...(productionUrl === undefined ? {} : { site: `https://${productionUrl}` }),
+  // Dev and preview listen on every interface, so the site is reachable from outside the
+  // devcontainer that `task start` runs in. Only the local servers read this.
+  server: { host: true },
   // Examples and the reference come from packages/*/src, the same way the tests resolve them.
   vite: { resolve: { alias: workspaceAlias } },
   integrations: [
