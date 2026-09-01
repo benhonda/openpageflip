@@ -241,3 +241,6 @@ worker-configuration.d.ts
 spike/
 
 .claude/
+.agents/
+skills-lock.json
+.devcontainer/
