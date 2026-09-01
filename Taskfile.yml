@@ -20,11 +20,13 @@ tasks:
         cmd: cd {{.ITEM}} && bunx tsdown
 
   typecheck:
-    desc: Type-check every package and the repo tooling with tsc
+    desc: Type-check every package and the repo tooling with tsc, the docs site with astro check, and the API reference with TypeDoc (a type the public API refers to but never exports fails here)
     cmds:
       - bunx tsc -p tsconfig.json
       - for: { var: PKGS }
         cmd: bunx tsc -p {{.ITEM}}/tsconfig.json
+      - cd apps/docs && bunx astro check
+      - cd apps/docs && bunx typedoc --emit none
 
   lint:
     desc: Lint and format-check with Biome
@@ -50,9 +52,32 @@ tasks:
     desc: Everything CI runs. Run before reporting work as done.
     cmds:
       - task: lint
+      - task: docs:readme
+        vars: { CLI_ARGS: --check }
       - task: typecheck
       - task: build
+      - task: docs:build
       - task: test
+
+  docs:dev:
+    desc: Serve the docs site with live reload; the API reference regenerates on package source changes
+    cmds:
+      - cd apps/docs && bunx astro dev
+
+  docs:build:
+    desc: Build the docs site (generates the API reference from packages/*/src into apps/docs/dist)
+    cmds:
+      - cd apps/docs && bunx astro build
+
+  docs:preview:
+    desc: Serve the built docs site
+    cmds:
+      - cd apps/docs && bunx astro preview
+
+  docs:readme:
+    desc: "Embed the docs examples into package READMEs (task docs:readme -- --check only verifies)"
+    cmds:
+      - bun scripts/embed-examples.ts {{.CLI_ARGS}}
 
   changeset:
     desc: Record a changeset for the packages you touched
@@ -73,4 +98,4 @@ tasks:
   clean:
     desc: Remove build output
     cmds:
-      - rm -rf packages/*/dist
+      - rm -rf packages/*/dist apps/docs/dist apps/docs/.astro apps/docs/src/content/docs/api

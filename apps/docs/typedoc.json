@@ -1,0 +1,9 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["../../packages/core/src/index.ts", "../../packages/react/src/index.ts"],
+  "tsconfig": "./tsconfig.typedoc.json",
+  "plugin": ["typedoc-plugin-markdown"],
+  "entryFileName": "index.md",
+  "readme": "none",
+  "treatWarningsAsErrors": true
+}

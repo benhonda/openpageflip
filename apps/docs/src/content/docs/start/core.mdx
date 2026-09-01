@@ -1,0 +1,45 @@
+---
+title: Plain JavaScript
+description: Install @openpageflip/core and turn a container of pages into a book.
+sidebar:
+  order: 1
+---
+
+import { Code } from "@astrojs/starlight/components";
+import { PackageManagers } from "starlight-package-managers";
+import corePkg from "@openpageflip/core/package.json";
+import CoreExample from "../../../components/CoreExample.astro";
+import pagesHtml from "../../../examples/core/pages.html?raw";
+
+<PackageManagers pkg={corePkg.name} />
+
+## Pages are elements
+
+Put the pages inside one container, in reading order. Any element can be a page. `data-density="hard"` makes a page rigid, which is what covers want.
+
+<Code code={pagesHtml} lang="html" title="index.html" />
+
+## Make the book
+
+Import the stylesheet once, then hand the container to `createBook`. The book below runs this exact file, and so does the test suite.
+
+<CoreExample name="quickstart" />
+
+## Then
+
+- `book.flipNext()`, `flipPrev()` and `flipTo(page)` animate a turn and resolve when it lands. `turnTo(page)` is instant.
+- `book.on("flip", ({ page }) => ...)` fires when a different spread is showing. `on` returns the unsubscribe function.
+- Pointer events that start on links, buttons and form fields never start a flip, so pages can hold real controls.
+- `book.destroy()` stops everything and puts the DOM back the way it was.
+
+Every option and event is described in the [reference](/openpageflip/api/openpageflip/core/), straight from the source.
+
+## Without a bundler
+
+The package also ships a single-file build for a `<script>` tag. It exposes `window.OpenPageFlip` with the same `createBook`.
+
+<Code code={`<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/${corePkg.name}/dist/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/${corePkg.name}"></script>
+<script>
+  const book = OpenPageFlip.createBook(document.getElementById("book"), { width: 400, height: 560 });
+</script>`} lang="html" title="index.html" />

@@ -1,6 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
-import { workspaceAlias } from "../../vitest.workspace-alias.ts";
+import { workspaceAlias } from "../../workspace-alias.ts";
 
 // Server rendering has no window: this project proves the package can be imported and rendered there.
 export default defineConfig({

@@ -1,3 +1,7 @@
+/**
+ * Framework-agnostic page-turn engine: `createBook`, its options, events and types.
+ * @module @openpageflip/core
+ */
 export type { Clock } from "./animation.ts";
 export { type Book, type BookEvents, type CreateBookOptions, createBook } from "./book.ts";
 export type { FlipFrame, Frame, ShadowData } from "./controller.ts";

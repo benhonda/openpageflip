@@ -1,0 +1,48 @@
+---
+/**
+ * Runs `src/examples/core/<name>.ts` against the shared page markup and shows its source.
+ * `showCode={false}` gives just the book (the home page hero).
+ */
+import pagesHtml from "../examples/core/pages.html?raw";
+import Example from "./Example.astro";
+
+interface Props {
+  name: string;
+  showCode?: boolean;
+}
+
+const { name, showCode = true } = Astro.props;
+
+const sources = import.meta.glob("../examples/core/*.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+const code = sources[`../examples/core/${name}.ts`];
+if (typeof code !== "string") {
+  throw new Error(`No core example named "${name}" in src/examples/core`);
+}
+---
+
+<Example code={showCode ? code : undefined} lang="ts" title={`${name}.ts`}>
+  <div class="book" data-core-example={name} set:html={pagesHtml} />
+</Example>
+
+<script>
+  import type { Book } from "@openpageflip/core";
+
+  const examples = import.meta.glob<{ mount: (container: HTMLElement) => Book }>(
+    "../examples/core/*.ts",
+  );
+
+  for (const el of document.querySelectorAll<HTMLElement>("[data-core-example]")) {
+    const name = el.dataset["coreExample"];
+    const load = examples[`../examples/core/${name}.ts`];
+    if (load === undefined) throw new Error(`No core example named "${name}"`);
+    // The markup file wraps the pages in #book; the example gets that element.
+    const container = el.querySelector<HTMLElement>("#book");
+    if (container === null) throw new Error("pages.html must wrap the pages in #book");
+    container.removeAttribute("id"); // several demos can share a page
+    void load().then(({ mount }) => mount(container));
+  }
+</script>

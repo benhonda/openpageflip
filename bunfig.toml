@@ -1,0 +1,5 @@
+# Isolated (pnpm-style) installs: each package resolves only the versions it declares.
+# Needed so apps/docs can run TypeDoc on TypeScript 6 while the rest of the repo compiles
+# with TypeScript 7, whose npm package has no JS compiler API yet (TypeStrong/typedoc#3098).
+[install]
+linker = "isolated"

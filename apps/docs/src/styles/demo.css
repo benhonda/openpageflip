@@ -1,0 +1,68 @@
+/* Demo dressing only: how the example books look on this site. The library styles nothing but geometry. */
+
+.example-demo {
+  padding: 1.5rem;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: var(--sl-color-bg-nav);
+}
+
+.example-demo:last-child {
+  border-radius: 0.5rem;
+}
+
+.example-demo .book {
+  margin: 0 auto;
+  max-width: 48rem;
+}
+
+.example-demo .page {
+  box-sizing: border-box;
+  padding: 1.5rem;
+  overflow: hidden;
+  background: #fbf6ee;
+  color: #3b2f24;
+  border: 1px solid #d8c9b3;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.example-demo .page:nth-child(even) {
+  box-shadow: inset -0.5rem 0 1rem -0.5rem rgb(0 0 0 / 0.08);
+}
+
+.example-demo .page:nth-child(odd) {
+  box-shadow: inset 0.5rem 0 1rem -0.5rem rgb(0 0 0 / 0.08);
+}
+
+.example-demo .page-cover {
+  background: #6f4a2d;
+  color: #fbf6ee;
+  border-color: #4d331f;
+  display: grid;
+  align-content: center;
+  text-align: center;
+}
+
+.example-demo .page h2,
+.example-demo .page h3 {
+  margin: 0 0 0.5rem;
+  color: inherit;
+  font-size: 1.1rem;
+}
+
+.example-demo .page-cover h2 {
+  font-size: 1.6rem;
+}
+
+.example-demo .page p {
+  margin: 0;
+}
+
+.example-demo .controls {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  align-items: center;
+  margin: 1rem 0 0;
+}

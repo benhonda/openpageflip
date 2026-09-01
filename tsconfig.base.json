@@ -20,7 +20,8 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "paths": {
-      "@openpageflip/core": ["./packages/core/src/index.ts"]
+      "@openpageflip/core": ["./packages/core/src/index.ts"],
+      "@openpageflip/react": ["./packages/react/src/index.ts"]
     }
   }
 }

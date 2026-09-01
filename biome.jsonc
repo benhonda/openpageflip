@@ -35,9 +35,27 @@
       "test": "recommended"
     },
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "complexity": {
+        // tsconfig turns on noPropertyAccessFromIndexSignature, which requires bracket access for
+        // index signatures; this rule demands the opposite, so the type checker wins.
+        "useLiteralKeys": "off"
+      }
     }
   },
+  "overrides": [
+    {
+      "includes": ["**/*.astro"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedImports": "off",
+            "noUnusedVariables": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": true,
     "actions": {

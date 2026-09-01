@@ -1,0 +1,35 @@
+---
+title: React
+description: Install @openpageflip/react and render a FlipBook whose children are the pages.
+sidebar:
+  order: 2
+---
+
+import { PackageManagers } from "starlight-package-managers";
+import corePkg from "@openpageflip/core/package.json";
+import reactPkg from "@openpageflip/react/package.json";
+import Example from "../../../components/Example.astro";
+import Quickstart from "../../../examples/react/Quickstart.tsx";
+import quickstartSource from "../../../examples/react/Quickstart.tsx?raw";
+
+The React package needs React 19 and the core package beside it.
+
+<PackageManagers pkg={`${corePkg.name} ${reactPkg.name}`} />
+
+## A book is a component
+
+Every direct child of `FlipBook` is a page. `Page` marks the hard ones and puts a class or style on the page element itself. Nothing needs a ref or `forwardRef`. This is the component running, and the file that renders it:
+
+<Example code={quickstartSource} lang="tsx" title="Quickstart.tsx">
+  <Quickstart client:load />
+</Example>
+
+## What the props do
+
+- Every option of the core package is a prop. Changing one rebuilds the book on the same page. Children can change freely.
+- `ref` gives you the core `Book`: `flipNext`, `flipTo`, `page`, `on` and the rest.
+- `page` makes the book controlled, and `onFlip` reports the first page of the spread that landed. See the [controlled page example](/openpageflip/examples/controlled-page/).
+- Each core event is a prop: `onInit`, `onUpdate`, `onFlip`, `onChangeState`, `onChangeOrientation`.
+- The component ships with `"use client"` and renders on the server. The demo above was server-rendered by this site, then hydrated.
+
+Every prop is described in the [reference](/openpageflip/api/openpageflip/react/), straight from the source.

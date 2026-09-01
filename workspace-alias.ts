@@ -1,12 +1,18 @@
 import { fileURLToPath } from "node:url";
 
+const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
+
 /**
- * Workspace packages resolve to each other's source under test, never to a stale `dist`.
- * Mirrors `paths` in tsconfig.base.json, which covers type-checking the same way.
+ * Workspace packages resolve to each other's source under Vite (tests and the docs site), never
+ * to a stale `dist`. Mirrors `paths` in tsconfig.base.json, which covers type-checking the same way.
+ * Exact matches only, so subpaths like `@openpageflip/core/package.json` still go through the
+ * package's `exports`.
  */
-export const workspaceAlias = {
-  "@openpageflip/core/styles.css": fileURLToPath(
-    new URL("./packages/core/src/styles.css", import.meta.url),
-  ),
-  "@openpageflip/core": fileURLToPath(new URL("./packages/core/src/index.ts", import.meta.url)),
-};
+export const workspaceAlias = [
+  { find: /^@openpageflip\/core$/, replacement: here("./packages/core/src/index.ts") },
+  {
+    find: /^@openpageflip\/core\/styles\.css$/,
+    replacement: here("./packages/core/src/styles.css"),
+  },
+  { find: /^@openpageflip\/react$/, replacement: here("./packages/react/src/index.ts") },
+];

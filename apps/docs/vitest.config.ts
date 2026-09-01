@@ -3,14 +3,13 @@ import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
 import { workspaceAlias } from "../../workspace-alias.ts";
 
-// Real-browser tests: the component drives real layout and pointer events.
+// Every docs example must mount and flip in a real browser: the demos are the docs.
 export default defineConfig({
   plugins: [react()],
   resolve: { alias: workspaceAlias },
   test: {
-    name: "@openpageflip/react",
-    include: ["test/**/*.test.tsx"],
-    exclude: ["**/*.ssr.test.tsx", "**/node_modules/**"],
+    name: "@openpageflip/docs",
+    include: ["test/**/*.test.{ts,tsx}"],
     browser: {
       enabled: true,
       headless: true,

@@ -7,6 +7,8 @@ Maintained successors to [StPageFlip](https://github.com/Nodlik/StPageFlip) and 
 | [`@openpageflip/core`](packages/core) | [![npm](https://img.shields.io/npm/v/@openpageflip/core)](https://www.npmjs.com/package/@openpageflip/core) | Framework-agnostic engine. ESM plus an IIFE build for `<script>` tags. |
 | [`@openpageflip/react`](packages/react) | [![npm](https://img.shields.io/npm/v/@openpageflip/react)](https://www.npmjs.com/package/@openpageflip/react) | React 19 bindings. |
 
+Docs, live demos, the API reference and changelogs: **https://benhonda.github.io/openpageflip/** (built from [`apps/docs`](apps/docs)).
+
 Both packages are pre-1.0 and under active construction. [`SPEC.md`](SPEC.md) has the plan, the decisions behind it, and what is still open.
 
 ## Working on it

@@ -1,3 +1,7 @@
+/**
+ * React 19 bindings: `FlipBook`, `Page`, and the core types they use.
+ * @module @openpageflip/react
+ */
 "use client";
 
 export type {

@@ -1,0 +1,20 @@
+---
+/**
+ * A live demo above the source that produced it. The slot is the demo; `code` is the same
+ * file's text, so the page can never show code that differs from what runs.
+ */
+import { Code } from "@astrojs/starlight/components";
+
+interface Props {
+  code?: string | undefined;
+  lang?: string;
+  title?: string;
+}
+
+const { code, lang, title } = Astro.props;
+---
+
+<div class="example">
+  <div class="example-demo not-content"><slot /></div>
+  {code !== undefined && <Code code={code} lang={lang} title={title} />}
+</div>
