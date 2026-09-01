@@ -1,6 +1,12 @@
 // Tests import the stylesheet for its side effect; Vite serves it, TypeScript only needs the module to exist.
 declare module "*.css";
 
+// The options test reads its own source to check the `@default` tags; Vite serves any file as text with `?raw`.
+declare module "*?raw" {
+  const source: string;
+  export default source;
+}
+
 // The original library, used untouched as the visual oracle. It ships no types; this is the
 // slice of its API the parity harness drives.
 declare module "page-flip" {
