@@ -37,6 +37,8 @@ jobs:
       - name: Nothing red ships
         run: task check
       - name: Apply changesets and commit the versions back
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # the changelog links each entry to its commit and PR
         run: |
           if ls .changeset/*.md 2>/dev/null | grep -qv README.md; then
             task version
