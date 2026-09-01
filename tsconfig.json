@@ -3,8 +3,10 @@
   "include": [
     "scripts",
     "vitest.config.ts",
+    "vitest.workspace-alias.ts",
     "packages/*/tsdown.config.ts",
-    "packages/*/vitest.config.ts"
+    "packages/*/vitest.config.ts",
+    "packages/*/vitest.node.config.ts"
   ],
   "compilerOptions": {
     "types": ["bun"],

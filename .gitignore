@@ -247,3 +247,6 @@ skills-lock.json
 
 # Visual-parity failure captures (see packages/core/test/visual/harness.ts)
 __screenshots__
+
+# Vitest browser-mode failure attachments
+.vitest-attachments

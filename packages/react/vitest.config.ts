@@ -1,16 +1,22 @@
+import react from "@vitejs/plugin-react";
 import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vitest/config";
+import { workspaceAlias } from "../../vitest.workspace-alias.ts";
 
-// Real-browser tests only: this library is layout, pointer and rAF code that jsdom cannot run.
+// Real-browser tests: the component drives real layout and pointer events.
 export default defineConfig({
+  plugins: [react()],
+  resolve: { alias: workspaceAlias },
   test: {
-    include: ["test/**/*.test.{ts,tsx}"],
+    name: "@openpageflip/react",
+    include: ["test/**/*.test.tsx"],
+    exclude: ["**/*.ssr.test.tsx", "**/node_modules/**"],
     browser: {
       enabled: true,
       headless: true,
       provider: playwright(),
       instances: [{ browser: "chromium" }],
-      screenshotFailures: false,
+      viewport: { width: 1000, height: 700 },
     },
   },
 });

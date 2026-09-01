@@ -104,8 +104,13 @@ this library. These are the places where it was wrong and we did not copy it:
 
 ## Open questions
 
-- `[open]` Does the React wrapper own each page's element (`<Page>` wrapper div) or diff
-  children by key onto user elements? Leaning owned: kills the forwardRef requirement.
+- `[settled]` 2026-09-01: the React wrapper owns every page element. Each child of `FlipBook`
+  renders inside a page `div` the wrapper controls; `<Page density style className>` is a
+  marker whose props land on that element. User components need no refs or `forwardRef`. The
+  wrapper re-syncs pages and redraws after every commit, so React can rewrite attributes freely.
+- `[settled]` 2026-09-01: "Next.js smoke test" is a Node SSR test (`renderToString`, no
+  `window`), which is the failure the upstream issues describe. A real Next.js example app
+  belongs with the docs site in phase 5, not in the package's test suite.
 - `[settled]` 2026-09-01: the parity oracle is the original's geometry source, vendored
   dev-only under `packages/core/test/oracle/` and run live inside the browser test next to the
   new kernel. No recorded JSON fixtures: the oracle is the single source of truth until it is

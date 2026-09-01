@@ -25,12 +25,14 @@
     "@changesets/changelog-github": "^1.0.0",
     "@changesets/cli": "^3.0.1",
     "@types/bun": "^1.4.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "@vitest/browser": "4.1.11",
     "@vitest/browser-playwright": "^4.1.11",
     "playwright": "^1.62.1",
     "publint": "^0.3.24",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "vitest-browser-react": "^2.2.0"
   }
 }

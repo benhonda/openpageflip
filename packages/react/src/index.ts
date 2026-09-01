@@ -1,3 +1,15 @@
 "use client";
 
-export type { Direction, FlipCorner, FlipDirection, Layout, PageDensity } from "@openpageflip/core";
+export type {
+  Book,
+  BookEvents,
+  BookOptions,
+  BookRect,
+  FlipCorner,
+  FlipState,
+  Layout,
+  Orientation,
+  PageDensity,
+} from "@openpageflip/core";
+export { FlipBook, type FlipBookProps } from "./FlipBook.tsx";
+export { Page, type PageProps } from "./Page.tsx";
