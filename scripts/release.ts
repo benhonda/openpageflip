@@ -1,6 +1,8 @@
 /**
- * Publishes every public workspace package whose local version is not on npm yet, tags each
- * one, and (in GitHub Actions) creates a GitHub release from its changelog entry.
+ * For every public workspace package: publish the current version if npm lacks it, tag it if the
+ * tag is missing, and (in GitHub Actions) create the GitHub release from its changelog entry if
+ * that is missing. Each step is skipped when already done, so a rerun finishes whatever an
+ * earlier run left undone.
  *
  * Why not `changeset publish` or `bun publish`: Changesets 3 cannot drive Bun, and
  * `bun publish` cannot do npm Trusted Publishing (oven-sh/bun#22423). So we pack with Bun
@@ -43,8 +45,12 @@ async function releaseNotes(cwd: string, version: string): Promise<string> {
   return section === undefined ? fallback : section.slice(section.indexOf("\n")).trim() || fallback;
 }
 
+const inActions = process.env["GITHUB_ACTIONS"] === "true";
 const packagesDir = join(import.meta.dir, "..", "packages");
-const published: { spec: string; cwd: string; version: string }[] = [];
+const created: string[] = [];
+
+type Release = { cwd: string; version: string; tag: string };
+const releases: Release[] = [];
 
 for (const dir of readdirSync(packagesDir)) {
   const cwd = join(packagesDir, dir);
@@ -52,30 +58,44 @@ for (const dir of readdirSync(packagesDir)) {
   if (!isManifest(manifest)) throw new Error(`${dir}/package.json is missing name or version`);
   if (manifest.private) continue;
 
-  const spec = `${manifest.name}@${manifest.version}`;
-  if (await isPublished(spec)) {
-    console.log(`skip ${spec}: already on npm`);
-    continue;
+  const tag = `${manifest.name}@${manifest.version}`;
+  if (await isPublished(tag)) {
+    console.log(`skip publish ${tag}: already on npm`);
+  } else {
+    console.log(`publish ${tag}`);
+    const tarball = join(
+      cwd,
+      `${manifest.name.replace("@", "").replace("/", "-")}-${manifest.version}.tgz`,
+    );
+    await $`bun pm pack --filename ${tarball}`.cwd(cwd);
+    await $`npm publish ${tarball} --access public`.cwd(cwd);
   }
 
-  console.log(`publish ${spec}`);
-  const tarball = join(
-    cwd,
-    `${manifest.name.replace("@", "").replace("/", "-")}-${manifest.version}.tgz`,
-  );
-  await $`bun pm pack --filename ${tarball}`.cwd(cwd);
-  await $`npm publish ${tarball} --access public`.cwd(cwd);
-  published.push({ spec, cwd, version: manifest.version });
+  const tagged = (await $`git tag --list ${tag}`.quiet()).stdout.toString().trim() === tag;
+  if (tagged) {
+    console.log(`skip tag ${tag}: exists`);
+  } else {
+    await $`git tag ${tag}`;
+    created.push(tag);
+  }
+  releases.push({ cwd, version: manifest.version, tag });
 }
 
-if (published.length === 0) {
-  console.log("nothing to publish");
+if (!inActions) {
+  console.log(
+    created.length > 0 ? `tagged locally: ${created.join(", ")} (not pushed)` : "nothing to tag",
+  );
 } else {
-  await $`bunx changeset git-tag`;
-  for (const { spec, cwd, version } of published) {
-    console.log(`New tag: ${spec}`);
-    if (process.env["GITHUB_ACTIONS"] !== "true") continue;
+  // Tags go to the remote before releases are created: `gh` refuses a tag it cannot see there.
+  if (created.length > 0) await $`git push origin --tags`;
+  for (const { cwd, version, tag } of releases) {
+    const exists = (await $`gh release view ${tag}`.quiet().nothrow()).exitCode === 0;
+    if (exists) {
+      console.log(`skip release ${tag}: exists`);
+      continue;
+    }
     const notes = await releaseNotes(cwd, version);
-    await $`gh release create ${spec} --title ${spec} --notes ${notes}`;
+    await $`gh release create ${tag} --verify-tag --title ${tag} --notes ${notes}`;
+    console.log(`New tag: ${tag}`);
   }
 }

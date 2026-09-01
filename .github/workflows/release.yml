@@ -50,8 +50,7 @@ jobs:
           else
             echo "no changesets: nothing to version"
           fi
-      - name: Publish, tag, and create GitHub releases
+      - name: Publish, tag, and create GitHub releases (each only if not done yet)
         run: task release
         env:
           GH_TOKEN: ${{ github.token }}
-      - run: git push --tags
