@@ -1,5 +1,11 @@
 # @openpageflip/core
 
+## 0.2.1
+
+### Patch Changes
+
+- [`329cb63`](https://github.com/benhonda/openpageflip/commit/329cb636aac5af1c4a9ec5f78f37e281bb48d4ac) Thanks [@benhonda](https://github.com/benhonda)! - A hard page's shadow is no longer painted on the empty side of the stage when a cover opens or the lone last page closes. It is drawn only where a page is there to receive it.
+
 ## 0.2.0
 
 ### Minor Changes
