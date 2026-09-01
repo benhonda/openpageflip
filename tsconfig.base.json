@@ -18,6 +18,9 @@
     "declaration": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@openpageflip/core": ["./packages/core/src/index.ts"]
+    }
   }
 }
