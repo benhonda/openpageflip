@@ -1,5 +1,15 @@
 # @openpageflip/core
 
+## 0.2.0
+
+### Minor Changes
+
+- [`9a70bd3`](https://github.com/benhonda/openpageflip/commit/9a70bd310a03d6d455f3b42ecc595e221af21f85) Thanks [@benhonda](https://github.com/benhonda)! - Audit fixes. Core: `flipTo` during a running flip lands it first instead of overshooting; a press during a flip lands it; `drag: false` no longer turns a long drag into a click; `ignoreDragOn` is validated at `createBook` and accepts `false`; a resize mid-drag drops the stale fold; `turnTo` out of range throws; a frame timestamp before the tween's start no longer produces negative progress; the renderer re-asserts its classes on every draw and writes to idle pages once, not every frame; an already-aborted `AbortSignal` never subscribes; `Book.redraw()` added. The unimplemented `Direction` vocabulary is removed until right-to-left lands. React: `FlipBook` redraws instead of re-measuring after each commit, and the ref handle exposes `redraw`.
+
+### Patch Changes
+
+- [`ce0f54d`](https://github.com/benhonda/openpageflip/commit/ce0f54db0e035f468e24b8316f19dcd0c2f3e63e) Thanks [@benhonda](https://github.com/benhonda)! - Docs site at https://benhonda.github.io/openpageflip/ with live demos and a generated API reference. READMEs now point there and embed their quick start from the site's own examples, which run in the test suite. Types the public API already referred to are exported so the reference (and your editor) can name them: `ShadowData`, `FlipFrame`, `Emitter`, `Listener`, `LayoutOptions`, `LayoutResult`, `ResolvedOptions` from core and `FlipBookEventProps` from react.
+
 ## 0.1.0
 
 ### Minor Changes
