@@ -244,3 +244,6 @@ spike/
 .agents/
 skills-lock.json
 .devcontainer/
+
+# Visual-parity failure captures (see packages/core/test/visual/harness.ts)
+__screenshots__

@@ -10,6 +10,7 @@
         "@changesets/changelog-github": "^1.0.0",
         "@changesets/cli": "^3.0.1",
         "@types/bun": "^1.4.0",
+        "@vitest/browser": "4.1.11",
         "@vitest/browser-playwright": "^4.1.11",
         "playwright": "^1.62.1",
         "publint": "^0.3.24",
@@ -20,11 +21,14 @@
     },
     "packages/core": {
       "name": "@openpageflip/core",
-      "version": "0.0.0",
+      "version": "0.0.1",
+      "devDependencies": {
+        "page-flip": "2.0.7",
+      },
     },
     "packages/react": {
       "name": "@openpageflip/react",
-      "version": "0.0.0",
+      "version": "0.0.1",
       "devDependencies": {
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
@@ -440,6 +444,8 @@
     "obug": ["obug@2.1.4", "", {}, "sha512-4a+OsYv9UktOJKE+l1A4OufDgdRF9PifWj+tJnHURo/P+WOxpG4GzUFL9qCalmWauao6ogiG+QvnCovwPoyAWA=="],
 
     "package-manager-detector": ["package-manager-detector@1.8.0", "", {}, "sha512-yQA4H19AmPEoMUeavPMDIe1higySl/gH/yaQrkT/s07Qp+7pp2hYz30N3z2l5BkjVkF9Ow6o0wjJamm2y7Sn0A=="],
+
+    "page-flip": ["page-flip@2.0.7", "", {}, "sha512-96lQFUUz7r/LZzEUZJ3yBIMEKU9+m8HMFDzTvTdD6P7Ag/wXINjp9n0W7b4wanwnDbQETo4uNUoL3zMqpFxwGA=="],
 
     "parse5": ["parse5@5.1.1", "", {}, "sha512-ugq4DFI0Ptb+WWjAdOK16+u/nHfiIrcE+sh8kZMaM0WllQKLI9rOUq6c2b7cwPkXdzfQESqvoqK6ug7U/Yyzug=="],
 

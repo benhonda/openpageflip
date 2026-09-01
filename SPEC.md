@@ -72,13 +72,35 @@ a test and a docs page.
    and result values instead of thrown errors. Run the vendored original next to it over a
    grid of drag positions and assert equality.
 2. **Headless controller, DOM renderer, input.** State machine, time-based tween with
-   easing, rAF only while animating, dirty-checked renderer, Pointer Events,
-   ResizeObserver. Screenshot parity against the original. This phase decides whether the
-   rebuild holds.
+   easing, rAF only while animating, Pointer Events, ResizeObserver. Screenshot parity
+   against the published original, run live in the browser test. This phase decides whether
+   the rebuild holds.
 3. **React wrapper.** Owned page elements (no `forwardRef` in user code), controlled and
    uncontrolled `page`, cleanup on unmount, StrictMode and Next.js smoke tests.
 4. **Backlog features** from the list above.
 5. **Docs, migration guide, 1.0.**
+
+## Deliberate differences from the original
+
+Everything else looks and behaves the same, held by the visual parity suite
+(`packages/core/test/visual.parity.test.ts`) that runs the published `page-flip@2.0.7` beside
+this library. These are the places where it was wrong and we did not copy it:
+
+- Animations always land their final frame. The original's loop skipped it, so a hovered corner
+  rested a frame short of its target.
+- Drag direction and corner come from where the press started, not from the first move.
+- `flipPrev` aims at the book's left edge, not the container's (StPageFlip #29 / PR #30).
+- Hard pages and hard shadows are placed from the book rect, so they are right when the book is
+  not flush with its container's top-left.
+- A page drawn hard for one flip (because its neighbour is hard) goes back to soft afterwards;
+  the original left it hard.
+- `destroy()` stops the frame loop, restores every page's inline style and class, and removes
+  what was added. The original removed the caller's root element and kept looping.
+- Frames are drawn only when something changes, never on a timer. Idle books cost nothing.
+- `[settled]` 2026-09-01: in portrait, the current page lifts away from itself, and that needs a
+  second copy of its element. The copy is a `cloneNode` like the original, but inert, without
+  ids, and removed the moment the flip ends. A blank paper back was considered and rejected
+  because it changes the look every portrait user knows.
 
 ## Open questions
 

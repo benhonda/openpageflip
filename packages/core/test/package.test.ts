@@ -13,7 +13,7 @@ test("stylesheet applies to the host element", () => {
   host.className = "opf-book";
   document.body.append(host);
   expect(getComputedStyle(host).touchAction).toBe("pan-y");
-  expect(getComputedStyle(host).getPropertyValue("--opf-flip-duration").trim()).toBe("800ms");
+  expect(getComputedStyle(host).perspective).toBe("2000px");
   host.remove();
 });
 
