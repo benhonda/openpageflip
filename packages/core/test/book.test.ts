@@ -177,6 +177,18 @@ describe("createBook", () => {
     expect(book.state).toBe(FlipState.read);
   });
 
+  test("a page keeps its own inline style through a flip and back", async () => {
+    const { book, container, pages } = mount(500, { width: 250, height: 350, flipDuration: 40 });
+    pointer(container, "pointerdown", 470, 40);
+    pointer(container, "pointermove", 330, 120);
+    expect(pages[0]?.style.background).toBe("pink");
+    expect(pages[2]?.style.background).toBe("pink");
+    pointer(container, "pointerup", 330, 120);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(book.page).toBe(0);
+    expect(pages.every((p) => p.style.background === "pink")).toBe(true);
+  });
+
   test("setPages swaps the pages and keeps the current page in range", () => {
     const { book, container, pages } = mount();
     book.turnTo(4);

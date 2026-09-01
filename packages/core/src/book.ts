@@ -47,7 +47,11 @@ export type Book = {
 
   /** Replace the page elements. Keeps the current page where possible. */
   setPages(pages: Iterable<HTMLElement>): void;
-  /** Re-measure the container and redraw. Resizes are handled automatically; call this after other layout changes. */
+  /**
+   * Re-measure the container and redraw. Resizes are handled automatically; call this after
+   * other changes to the container or pages (a framework re-render, a swapped class name).
+   * Cheap enough to call after every render of a wrapping component.
+   */
   update(): void;
   /** Stop everything, drop listeners and observers, and restore the DOM. */
   destroy(): void;

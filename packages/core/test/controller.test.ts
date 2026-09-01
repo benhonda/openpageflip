@@ -82,7 +82,7 @@ describe("FlipController", () => {
     expect(manual.pending()).toBe(1);
     expect(await settle(promise, manual)).toBe(true);
     expect(controller.page).toBe(2);
-    expect(shown.at(-1)).toBe(2);
+    expect(shown).toEqual([2]);
     expect(states).toEqual([FlipState.flipping, FlipState.read]);
     expect(last().flip).toBeNull();
     expect(manual.pending()).toBe(0);

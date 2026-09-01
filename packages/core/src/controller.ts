@@ -209,9 +209,12 @@ export class FlipController {
     this.left = left;
     this.right = right;
     const spread = this.spreads[this.spreadIndex];
-    if (spread !== undefined) this.currentPage = spread[0];
+    const page = spread === undefined ? this.currentPage : spread[0];
+    const changed = page !== this.currentPage;
+    this.currentPage = page;
     this.render();
-    this.hooks.onPage(this.currentPage);
+    // Relayouts and redraws re-show the same spread; only a real change is a flip.
+    if (changed) this.hooks.onPage(page);
   }
 
   // ---- animated flips -----------------------------------------------------------------------

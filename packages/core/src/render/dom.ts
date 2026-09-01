@@ -35,6 +35,30 @@ const CLASS = {
 
 type Side = "left" | "right";
 
+/**
+ * The inline properties this renderer owns on a page element. Every draw sets all of them
+ * (clearing the ones it does not use) and touches nothing else, so a page keeps whatever other
+ * inline style its author or framework gave it.
+ */
+const PAGE_STYLE = [
+  "display",
+  "position",
+  "zIndex",
+  "left",
+  "top",
+  "width",
+  "height",
+  "transformOrigin",
+  "transform",
+  "clipPath",
+  "backfaceVisibility",
+] as const;
+type PageStyle = Partial<Record<(typeof PAGE_STYLE)[number], string>>;
+
+function applyPageStyle(el: HTMLElement, style: PageStyle): void {
+  for (const key of PAGE_STYLE) el.style[key] = style[key] ?? "";
+}
+
 type SizingOptions = Pick<
   ResolvedOptions,
   "autoSize" | "size" | "width" | "height" | "minWidth" | "maxWidth" | "layout"
@@ -77,7 +101,7 @@ export class DomRenderer {
 
   setPages(pages: readonly PageModel[]): void {
     for (const page of this.pages) {
-      if (!pages.includes(page)) this.restore(page.element);
+      if (!pages.some((next) => next.element === page.element)) this.restore(page.element);
     }
     this.pages = pages;
     for (const page of pages) {
@@ -108,7 +132,7 @@ export class DomRenderer {
     const { rect, flip } = frame;
     const active = new Set([frame.left, frame.right, flip?.flipping, flip?.bottom]);
     for (const [index, page] of this.pages.entries()) {
-      if (!active.has(index)) page.element.style.cssText = "display: none";
+      if (!active.has(index)) applyPageStyle(page.element, { display: "none" });
       page.element.classList.toggle(CLASS.hard, page.drawingDensity === PageDensity.hard);
       page.element.classList.toggle(CLASS.soft, page.drawingDensity === PageDensity.soft);
     }
@@ -223,7 +247,15 @@ export class DomRenderer {
     if (el === null) return;
     el.classList.add(CLASS.flat);
     const left = side === "right" ? rect.left + rect.pageWidth : rect.left;
-    el.style.cssText = `position: absolute; display: block; height: ${rect.height}px; left: ${left}px; top: ${rect.top}px; width: ${rect.pageWidth}px; z-index: ${Z.flat};`;
+    applyPageStyle(el, {
+      position: "absolute",
+      display: "block",
+      height: `${rect.height}px`,
+      left: `${left}px`,
+      top: `${rect.top}px`,
+      width: `${rect.pageWidth}px`,
+      zIndex: String(Z.flat),
+    });
   }
 
   private drawSoft(
@@ -251,19 +283,41 @@ export class DomRenderer {
         return `${g.x}px ${g.y}px`;
       })
       .join(", ");
-    el.style.cssText = `display: block; z-index: ${zIndex}; left: 0; top: 0; width: ${rect.pageWidth}px; height: ${rect.height}px; transform-origin: 0 0; clip-path: polygon(${polygon}); transform: translate3d(${at.x}px, ${at.y}px, 0) rotate(${angle}rad);`;
+    applyPageStyle(el, {
+      position: "absolute",
+      display: "block",
+      zIndex: String(zIndex),
+      left: "0",
+      top: "0",
+      width: `${rect.pageWidth}px`,
+      height: `${rect.height}px`,
+      transformOrigin: "0 0",
+      clipPath: `polygon(${polygon})`,
+      transform: `translate3d(${at.x}px, ${at.y}px, 0) rotate(${angle}rad)`,
+    });
   }
 
   private drawHard(index: number, side: Side, angle: number, zIndex: number, rect: BookRect): void {
     const el = this.element(index, side);
     if (el === null) return;
     el.classList.remove(CLASS.flat);
-    const common = `display: block; z-index: ${zIndex}; left: 0; top: 0; width: ${rect.pageWidth}px; height: ${rect.height}px; backface-visibility: hidden; clip-path: none;`;
     const spine = rect.left + rect.width / 2;
-    el.style.cssText =
-      side === "left"
-        ? `${common} transform-origin: ${rect.pageWidth}px 0; transform: translate3d(${rect.left}px, ${rect.top}px, 0) rotateY(${angle}deg);`
-        : `${common} transform-origin: 0 0; transform: translate3d(${spine}px, ${rect.top}px, 0) rotateY(${angle}deg);`;
+    applyPageStyle(el, {
+      position: "absolute",
+      display: "block",
+      zIndex: String(zIndex),
+      left: "0",
+      top: "0",
+      width: `${rect.pageWidth}px`,
+      height: `${rect.height}px`,
+      backfaceVisibility: "hidden",
+      clipPath: "none",
+      transformOrigin: side === "left" ? `${rect.pageWidth}px 0` : "0 0",
+      transform:
+        side === "left"
+          ? `translate3d(${rect.left}px, ${rect.top}px, 0) rotateY(${angle}deg)`
+          : `translate3d(${spine}px, ${rect.top}px, 0) rotateY(${angle}deg)`,
+    });
   }
 
   // ---- shadows --------------------------------------------------------------------------------
