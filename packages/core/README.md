@@ -1,5 +1,7 @@
 # @openpageflip/core
 
+[![npm](https://img.shields.io/npm/v/@openpageflip/core)](https://www.npmjs.com/package/@openpageflip/core)
+
 Framework-agnostic page-turn engine. Successor to [`page-flip`](https://www.npmjs.com/package/page-flip) (StPageFlip).
 
 Pre-1.0 and under construction. The plan, decisions and status live in the [repository's SPEC.md](https://github.com/benhonda/openpageflip/blob/main/SPEC.md).

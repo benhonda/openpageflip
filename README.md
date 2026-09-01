@@ -2,10 +2,10 @@
 
 Maintained successors to [StPageFlip](https://github.com/Nodlik/StPageFlip) and [react-pageflip](https://github.com/Nodlik/react-pageflip): the same page-turn effect, rebuilt for 2026 browsers, strict TypeScript and React 19.
 
-| Package | What it is |
-| --- | --- |
-| [`@openpageflip/core`](packages/core) | Framework-agnostic engine. ESM plus an IIFE build for `<script>` tags. |
-| [`@openpageflip/react`](packages/react) | React 19 bindings. |
+| Package | npm | What it is |
+| --- | --- | --- |
+| [`@openpageflip/core`](packages/core) | [![npm](https://img.shields.io/npm/v/@openpageflip/core)](https://www.npmjs.com/package/@openpageflip/core) | Framework-agnostic engine. ESM plus an IIFE build for `<script>` tags. |
+| [`@openpageflip/react`](packages/react) | [![npm](https://img.shields.io/npm/v/@openpageflip/react)](https://www.npmjs.com/package/@openpageflip/react) | React 19 bindings. |
 
 Both packages are pre-1.0 and under active construction. [`SPEC.md`](SPEC.md) has the plan, the decisions behind it, and what is still open.
 
