@@ -8,7 +8,7 @@ import starlightLinksValidator from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 import { workspaceAlias } from "../../workspace-alias.ts";
-import { packageNames, repoUrl, siteDescription, siteTitle, siteUrl } from "./src/site.ts";
+import { llmsTxt, packageNames, repoUrl, siteDescription, siteTitle, siteUrl } from "./src/site.ts";
 
 const isDev = process.argv.includes("dev");
 
@@ -76,8 +76,12 @@ export default defineConfig({
         starlightChangelogs(),
         // Internal links, including those into the generated reference, are checked at build time.
         starlightLinksValidator(),
-        // /llms.txt, /llms-full.txt and /llms-small.txt for AI assistants, from the same pages.
+        // The text twins for AI assistants (see `llmsTxt` in src/site.ts), from the same pages.
         starlightLlmsTxt({
+          // The full text is sorted by page id, which would put the whole API reference before
+          // the quick start. Guides first, then the reference.
+          promote: ["index*", "start/**", "examples/**"],
+          customSets: [llmsTxt.guides.set],
           optionalLinks: [
             { label: "Source on GitHub", url: repoUrl },
             ...packageNames.map((name) => ({

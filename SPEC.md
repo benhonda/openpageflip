@@ -50,13 +50,20 @@ closed by design.
   - Internal links, including those into the generated reference, are validated at build.
   - Prose is the only hand-written part, and it points at those surfaces instead of restating
     them.
+  - `[settled]` 2026-09-02: the site is also served as plain text for AI assistants by
+    starlight-llms-txt (`/llms.txt`, `/llms-full.txt`, and a guides-only set), from the same pages.
+    The paths are written once in `apps/docs/src/site.ts`; `start/agents.mdx` is the page that
+    tells a reader where to point an agent, and its snippets are built from those paths and the
+    package manifests, so it cannot name a file or package that does not exist.
   - `[settled]` 2026-09-02: the playground (`apps/docs/src/components/Playground.tsx`) is a site
     component, not an example: every option as a control, the API as buttons, an event log, and
     the options rendered as code generated from the controls' state. The landing page keeps the
     quick start as its demo; the playground is the second surface, for exploring settings.
-- `[settled]` **The migration guide is data, not prose**: a typed table from `keyof FlipSetting`
-  (the vendored `page-flip` types) to `keyof BookOptions`, so the type checker fails it when
-  either API moves. Written in phase 5 once the backlog options exist.
+- `[settled]` **The migration guide is data, not prose**: `apps/docs/src/migration/index.ts` maps
+  every key of the vendored `page-flip@2.0.7` / `react-pageflip@2.0.3` API (`upstream.ts`) to
+  `keyof BookOptions`, `keyof Book`, `keyof BookEvents` and `keyof FlipBookProps`, so the type
+  checker fails the build when either side moves. `start/migrate.mdx` renders it. Options still
+  on the backlog (`direction`, keyboard) get rows as they land.
 
 ## Toolchain (verified 2026-09-01)
 

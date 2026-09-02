@@ -1,5 +1,10 @@
 import corePkg from "@openpageflip/core/package.json" with { type: "json" };
 import reactPkg from "@openpageflip/react/package.json" with { type: "json" };
+import type starlightLlmsTxt from "starlight-llms-txt";
+
+type CustomSet = NonNullable<
+  NonNullable<Parameters<typeof starlightLlmsTxt>[0]>["customSets"]
+>[number];
 
 /**
  * The site's identity, read from the core package so the docs never restate it. astro.config.ts
@@ -11,6 +16,31 @@ export const siteDescription = corePkg.description;
 export const siteUrl = corePkg.homepage;
 export const repoUrl = corePkg.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
 export const packageNames = [corePkg.name, reactPkg.name] as const;
+
+/**
+ * The text twins of the site that starlight-llms-txt serves for AI assistants, generated from the
+ * same pages at every build. The plugin fixes the first two paths; each custom set is served at
+ * `/_llms-txt/<slug>.txt`, the slug being the label the GitHub-heading way, so labels here stay one
+ * lowercase-safe word. astro.config.ts registers the sets and start/agents.mdx lists the files.
+ */
+export const llmsTxt = {
+  /** The short index: description, then links to the other files. */
+  index: "/llms.txt",
+  /** Every page, the API reference included. */
+  full: "/llms-full.txt",
+  /** The quick starts and the examples without the reference: enough to build a book. */
+  guides: {
+    set: {
+      label: "Guides",
+      paths: ["start/**", "examples/**"],
+      description: "the quick starts and the examples, without the API reference",
+    },
+    path: "/_llms-txt/guides.txt",
+  },
+} as const satisfies Record<string, string | { set: CustomSet; path: string }>;
+
+/** A site path as the absolute address an agent working in another repository needs. */
+export const absoluteUrl = (path: string): string => new URL(path, siteUrl).href;
 
 /** The one Open Graph image, served by pages/og.png.ts at the size link previews crop to. */
 export const ogImage = { path: "/og.png", width: 1200, height: 630 } as const;
