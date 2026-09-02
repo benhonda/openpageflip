@@ -1,5 +1,5 @@
 import { defineRouteMiddleware } from "@astrojs/starlight/route-data";
-import { ogImage, packageNames, repoUrl, siteDescription, siteTitle } from "./site.ts";
+import { ogImage, packageNames, repoUrl, siteDescription, siteTitle, upstream } from "./site.ts";
 
 /**
  * Every page shares the one Open Graph image (pages/og.png.ts) and describes the project as a
@@ -17,7 +17,7 @@ export const onRequest = defineRouteMiddleware(({ site, locals }) => {
     programmingLanguage: "TypeScript",
     runtimePlatform: "Web browser",
     license: "https://opensource.org/license/mit",
-    isBasedOn: "https://github.com/Nodlik/StPageFlip",
+    isBasedOn: upstream.url,
     identifier: packageNames.map((name) => `https://www.npmjs.com/package/${name}`),
     ...(site === undefined ? {} : { url: site.href }),
   };

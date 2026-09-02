@@ -1,6 +1,6 @@
 ---
 title: React
-description: Install @openpageflip/react and render a FlipBook whose children are the pages.
+description: Install the React package beside the core one and render a FlipBook. Its children are the pages.
 sidebar:
   order: 2
 ---
@@ -9,23 +9,24 @@ import { PackageManagers } from "starlight-package-managers";
 import corePkg from "@openpageflip/core/package.json";
 import reactPkg from "@openpageflip/react/package.json";
 import ReactExample from "../../../components/ReactExample.astro";
+import { reactMajor } from "../../../site.ts";
 
-The React package needs React 19 and the core package beside it.
+The React package needs React {reactMajor}, and the core package installed next to it.
 
 <PackageManagers pkg={`${corePkg.name} ${reactPkg.name}`} />
 
 ## A book is a component
 
-Every direct child of `FlipBook` is a page. `Page` marks the hard ones and puts a class or style on the page element itself. Nothing needs a ref or `forwardRef`. This is the component running, and the file that renders it:
+Every direct child of `FlipBook` is a page. Wrap one in `Page` when it needs to be hard, or when you want a class or style on the page element itself. Nothing needs a ref or `forwardRef`. Here's the component running, and the file that renders it:
 
 <ReactExample name="Quickstart" />
 
 ## What the props do
 
-- Every option of the core package is a prop. Changing one rebuilds the book on the same page. Children can change freely.
-- `ref` gives you the core `Book`: `flipNext`, `flipTo`, `page`, `on` and the rest.
-- `page` makes the book controlled, and `onFlip` reports the first page of the spread that landed. See the [controlled page example](/examples/controlled-page/).
+- Every core option is a prop. Change one and the book is rebuilt on the same page it was showing. Children can change whenever.
+- `ref` gives you the core `Book`, so `flipNext`, `flipTo`, `page`, `on` and the rest are right there.
+- `page` makes the book controlled, and `onFlip` tells you the first page of the spread that landed. The [controlled page example](/examples/controlled-page/) shows the two working together.
 - Each core event is a prop: `onInit`, `onUpdate`, `onFlip`, `onChangeState`, `onChangeOrientation`.
-- The component ships with `"use client"` and renders on the server. The demo above was server-rendered by this site, then hydrated.
+- The component ships with `"use client"` and renders on the server. The demo above was server-rendered by this site and hydrated after.
 
-Every prop is described in the [reference](/api/openpageflip/react/), straight from the source.
+Every prop is in the [reference](/api/openpageflip/react/), generated from the source.

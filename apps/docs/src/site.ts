@@ -1,6 +1,7 @@
 import corePkg from "@openpageflip/core/package.json" with { type: "json" };
 import reactPkg from "@openpageflip/react/package.json" with { type: "json" };
 import type starlightLlmsTxt from "starlight-llms-txt";
+import rootPkg from "../../../package.json" with { type: "json" };
 
 type CustomSet = NonNullable<
   NonNullable<Parameters<typeof starlightLlmsTxt>[0]>["customSets"]
@@ -16,6 +17,28 @@ export const siteDescription = corePkg.description;
 export const siteUrl = corePkg.homepage;
 export const repoUrl = corePkg.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
 export const packageNames = [corePkg.name, reactPkg.name] as const;
+
+/**
+ * The library this one replaces. Its version is the one the core package vendors for the parity
+ * tests, so the prose names the exact release the screenshots are held to.
+ */
+export const upstream = {
+  name: "StPageFlip",
+  url: "https://github.com/Nodlik/StPageFlip",
+  package: "page-flip",
+  version: corePkg.devDependencies["page-flip"],
+  reactPackage: "react-pageflip",
+} as const;
+
+/**
+ * The React major the wrapper needs. Its peer dependency is `catalog:`, so the range lives in the
+ * root manifest's catalog; the prose only ever says the major.
+ */
+const reactRange = rootPkg.workspaces.catalog.react;
+const reactMajorMatch = /\d+/.exec(reactRange);
+if (reactMajorMatch === null)
+  throw new Error(`No React major in the catalog range "${reactRange}"`);
+export const reactMajor = reactMajorMatch[0];
 
 /**
  * The text twins of the site that starlight-llms-txt serves for AI assistants, generated from the

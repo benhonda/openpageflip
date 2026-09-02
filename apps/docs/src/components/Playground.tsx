@@ -335,7 +335,7 @@ export default function Playground(): ReactElement {
           />
           {settings.size === SizeMode.stretch && (
             <p className="hint">
-              Stretched to the container; width and height set the page's ratio.
+              Stretched to fit the container - width and height only set the page's ratio.
             </p>
           )}
           <Slider

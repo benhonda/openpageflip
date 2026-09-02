@@ -13,7 +13,9 @@ export default function Quickstart() {
         </Page>
         <Page className="page">
           <h3>Every child is a page</h3>
-          <p>Wrap one in Page to make it hard or to style the page element itself.</p>
+          <p>
+            Wrap one in Page to make it hard, or to put a class or style on the page element itself.
+          </p>
         </Page>
         <Page className="page">
           <h3>No refs on pages</h3>
@@ -21,11 +23,11 @@ export default function Quickstart() {
         </Page>
         <Page className="page">
           <h3>Props are options</h3>
-          <p>Change one and the book rebuilds on the same page. Children can change freely.</p>
+          <p>Change one and the book is rebuilt on the same page. Children can change whenever.</p>
         </Page>
         <Page className="page">
           <h3>Renders on the server</h3>
-          <p>This page was server-rendered by the docs site, then hydrated.</p>
+          <p>This page was server-rendered by the docs site and hydrated after.</p>
         </Page>
         <Page density="hard" className="page page-cover">
           <p>The end</p>

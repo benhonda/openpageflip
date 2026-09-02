@@ -1,6 +1,6 @@
 ---
 title: AI assistants
-description: Where to point Claude Code, Cursor, Copilot or any other coding agent so it builds a book from these docs instead of from memory.
+description: Where to point Claude Code, Cursor, Copilot or whatever agent you use, so it builds a book from these docs instead of from memory.
 sidebar:
   order: 3
 ---
@@ -8,31 +8,31 @@ sidebar:
 import { Code } from "@astrojs/starlight/components";
 import corePkg from "@openpageflip/core/package.json";
 import reactPkg from "@openpageflip/react/package.json";
-import { absoluteUrl, llmsTxt, siteUrl } from "../../../site.ts";
+import { absoluteUrl, llmsTxt, reactMajor, siteUrl, upstream } from "../../../site.ts";
 
-Most assistants have seen StPageFlip and react-pageflip, and this library is not either of them: the option and method names are different and there is no compatibility layer. So the one thing worth doing is pointing the agent at these docs before it writes code.
+Most assistants have seen {upstream.name} and {upstream.reactPackage}, and honestly that's the problem: this library isn't either of them. The names are different and there's no compatibility layer, so an agent working from memory writes against an API that isn't there. The fix is just pointing it at these docs before it writes anything.
 
 ## The docs as plain text
 
-Every page on this site is also served as Markdown, generated from the same source at every build, so an agent can read it without scraping HTML.
+Every page here is also served as Markdown, generated from the same source at every build, so an agent can read it without scraping HTML.
 
-- <a href={llmsTxt.index}><code>{absoluteUrl(llmsTxt.index)}</code></a>: the index, a description and links to the other files. Hand this one over when in doubt.
-- <a href={llmsTxt.guides.path}><code>{absoluteUrl(llmsTxt.guides.path)}</code></a>: {llmsTxt.guides.set.description}. Enough to build a book, and small enough to read whole.
+- <a href={llmsTxt.index}><code>{absoluteUrl(llmsTxt.index)}</code></a>: the index. A short description and links to the other two. If you're not sure which to give it, give it this one.
+- <a href={llmsTxt.guides.path}><code>{absoluteUrl(llmsTxt.guides.path)}</code></a>: {llmsTxt.guides.set.description}. Small enough to read whole, and enough to build a book from.
 - <a href={llmsTxt.full}><code>{absoluteUrl(llmsTxt.full)}</code></a>: everything, API reference included.
 
-Tools that index documentation from a URL (Cursor's docs setting, for one) can be given the site address, <a href={siteUrl}><code>{siteUrl}</code></a>, and will find the same pages.
+Tools that index docs from a URL (Cursor's docs setting, for one) can be given the site address, <a href={siteUrl}><code>{siteUrl}</code></a>, and will find the same pages.
 
 ## Tell it once
 
-Add this to the file your agent reads at the start of every session (`CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`, a Cursor rule) and it knows where to look without being told each time.
+Put this in the file your agent reads at the start of every session - `CLAUDE.md`, `AGENTS.md`, `.github/copilot-instructions.md`, a Cursor rule, whichever yours is - and you don't have to say it again.
 
 <Code
   lang="md"
   title="AGENTS.md"
   code={`## OpenPageFlip
 
-Page-flip effect for HTML content: \`${corePkg.name}\` (plain JavaScript) and \`${reactPkg.name}\` (React 19).
-It is not StPageFlip or page-flip: the API is different, so read the docs before writing code.
+Page-flip effect for HTML content: \`${corePkg.name}\` (plain JavaScript) and \`${reactPkg.name}\` (React ${reactMajor}).
+It is not ${upstream.name} or ${upstream.package}: the API is different, so read the docs before writing code.
 
 - Guides and examples: ${absoluteUrl(llmsTxt.guides.path)}
 - Everything, API reference included: ${absoluteUrl(llmsTxt.full)}
@@ -41,10 +41,10 @@ It is not StPageFlip or page-flip: the API is different, so read the docs before
 
 ## Or ask once
 
-For a one-off, a prompt that starts with the docs does the same job. Fill in the parts in angle brackets.
+For a one-off, a prompt that starts with the docs does the same job. Fill in the bits in angle brackets.
 
 <Code
   lang="text"
   title="prompt"
-  code={`Read ${absoluteUrl(llmsTxt.guides.path)} and then add an OpenPageFlip book to <the page> whose pages are <what the pages are>. Follow those docs rather than what you know about StPageFlip or page-flip; the API is different.`}
+  code={`Read ${absoluteUrl(llmsTxt.guides.path)} and then add an OpenPageFlip book to <the page> whose pages are <what the pages are>. Follow those docs rather than what you know about ${upstream.name} or ${upstream.package}; the API is different.`}
 />

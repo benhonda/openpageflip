@@ -19,7 +19,7 @@ The container's children are the pages. `data-density="hard"` makes a page rigid
   </div>
   <div class="page">
     <h3>Drag a corner</h3>
-    <p>Pick up any corner and pull. Let go past the middle and the page turns. Let go early and it settles back.</p>
+    <p>Pick up any corner and pull. Let go past the middle and the page turns; let go early and it settles back.</p>
   </div>
   <div class="page">
     <h3>Or just click</h3>
@@ -27,11 +27,11 @@ The container's children are the pages. `data-density="hard"` makes a page rigid
   </div>
   <div class="page">
     <h3>Hard and soft</h3>
-    <p>Covers are hard: they swing as one rigid sheet. Inner pages bend along the fold, like paper.</p>
+    <p>Covers are hard, so they swing as one stiff sheet. Inner pages bend along the fold, the way paper does.</p>
   </div>
   <div class="page">
     <h3>Any HTML</h3>
-    <p>Pages are ordinary elements. Text, images, forms, video: whatever a page holds keeps working.</p>
+    <p>Pages are ordinary elements. Text, images, forms, video - whatever a page holds keeps working.</p>
   </div>
   <div class="page page-cover" data-density="hard">
     <p>The end</p>

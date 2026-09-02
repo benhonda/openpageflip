@@ -1,10 +1,10 @@
 ---
 title: Controlled page
-description: Drive a React FlipBook from state and keep that state honest with onFlip.
+description: Drive a React FlipBook from state, and let onFlip keep that state honest when the reader turns pages by hand.
 ---
 
 import ReactExample from "../../../components/ReactExample.astro";
 
-When `page` changes, the book flips there. When the reader turns a page by hand, `onFlip` reports the first page of the spread that landed, so the state follows the book as much as the book follows the state. Pick a chapter that sits on the right of a spread and watch the number settle on the spread's first page.
+When `page` changes, the book flips there. When the reader turns a page by hand, `onFlip` reports the first page of the spread that landed, so the state follows the book as much as the book follows the state. Try picking a chapter that sits on the right-hand side of a spread - the number settles on the spread's first page, not the one you picked.
 
 <ReactExample name="Controlled" />
