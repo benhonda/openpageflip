@@ -16,6 +16,11 @@
   max-width: 48rem;
 }
 
+/* A book narrower than its box (a single page capped by maxWidth, a fixed size) stays centred. */
+.example-demo .opf-book {
+  margin-inline: auto;
+}
+
 .example-demo .page {
   box-sizing: border-box;
   padding: 1.5rem;

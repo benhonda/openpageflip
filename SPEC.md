@@ -44,7 +44,8 @@ closed by design.
     value `resolveOptions` applies.
   - `apps/docs/src/examples/` is the demo, the code shown beside it (`?raw`), the browser test
     fixture (`apps/docs/test/`) and the README quick start (`task docs:readme` embeds it;
-    `task check` fails when a README drifts).
+    `task check` fails when a README drifts). A core example runs against the shared
+    `pages.html` unless it brings its own `<name>.html`, on the site and in the tests alike.
   - Changelogs are read from `packages/*/CHANGELOG.md`, which Changesets writes. Package names,
     descriptions, install commands and the site URL come from `package.json`.
   - Internal links, including those into the generated reference, are validated at build.

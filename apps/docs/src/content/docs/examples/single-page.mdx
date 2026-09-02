@@ -1,10 +1,10 @@
 ---
 title: One page at a time
-description: A fixed-size book that shows a single page and only turns from its corners.
+description: A book that stays one page wide on any screen and only turns from its corners, so the page itself is free for reading.
 ---
 
 import CoreExample from "../../../components/CoreExample.astro";
 
-`layout: "single"` keeps one page on screen whatever the container's width, `click: "corners"` leaves the middle of the page to whatever it holds, and the fixed `width` and `height` are used as they are.
+Some books shouldn't open into a spread - a phone-sized reader, say, where one page is the whole point. This one stays single however wide the container gets, and only the corners turn it, so clicking, selecting and following links in the middle of the page just work. On a mouse, hovering a corner lifts it so you can see where to grab.
 
 <CoreExample name="single-page" />

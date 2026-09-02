@@ -1,9 +1,9 @@
 ---
 /**
- * Runs `src/examples/core/<name>.ts` against the shared page markup and shows its source.
- * `showCode={false}` gives just the book (the home page hero).
+ * Runs `src/examples/core/<name>.ts` and shows its source. The pages are `<name>.html` beside it
+ * when the example has its own, otherwise the shared pages.html (the test suite picks the same
+ * way). `showCode={false}` gives just the book (the home page hero).
  */
-import pagesHtml from "../examples/core/pages.html?raw";
 import Example from "./Example.astro";
 
 interface Props {
@@ -22,6 +22,13 @@ const code = sources[`../examples/core/${name}.ts`];
 if (typeof code !== "string") {
   throw new Error(`No core example named "${name}" in src/examples/core`);
 }
+const markup = import.meta.glob("../examples/core/*.html", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+const pagesHtml = markup[`../examples/core/${name}.html`] ?? markup["../examples/core/pages.html"];
+if (typeof pagesHtml !== "string") throw new Error("src/examples/core/pages.html is missing");
 ---
 
 <Example code={showCode ? code : undefined} lang="ts" title={`${name}.ts`}>
