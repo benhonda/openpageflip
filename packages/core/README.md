@@ -2,7 +2,7 @@
 
 Framework-agnostic page-turn engine. Successor to [`page-flip`](https://www.npmjs.com/package/page-flip) (StPageFlip): the same look, pixel-matched against the original in the test suite, on modern internals.
 
-Docs, live demos, the API reference and the changelog: **https://benhonda.github.io/openpageflip/**
+Docs, live demos, the API reference and the changelog: <!-- homepage -->**[openpageflip.shittylittleapps.com](https://openpageflip.shittylittleapps.com)**<!-- /homepage -->
 
 ```sh
 bun add @openpageflip/core

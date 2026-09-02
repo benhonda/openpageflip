@@ -10,7 +10,7 @@
     "url": "git+https://github.com/benhonda/openpageflip.git",
     "directory": "packages/react"
   },
-  "homepage": "https://github.com/benhonda/openpageflip#readme",
+  "homepage": "https://openpageflip.shittylittleapps.com",
   "bugs": "https://github.com/benhonda/openpageflip/issues",
   "keywords": [
     "react",

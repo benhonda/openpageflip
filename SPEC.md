@@ -73,10 +73,13 @@ Bun workspaces + catalog · tsdown · TypeScript 7 (`strict`, `verbatimModuleSyn
   (TypeStrong/typedoc#3098 tracks TS 7.1 support). `apps/docs` pins `typescript@6` for TypeDoc
   only, which is why `bunfig.toml` uses Bun's isolated linker: each package resolves the
   versions it declares. Drop the pin when TypeDoc supports TS 7.
-- `[settled]` 2026-09-01: the docs site is hosted on Vercel (project root `apps/docs`, Astro
-  preset), at the root of its production domain; `astro.config.ts` reads that domain from
-  `VERCEL_PROJECT_PRODUCTION_URL`. GitHub Pages was the first assumption and was dropped: its
-  `/<repo>` base path broke every asset URL on Vercel.
+- `[settled]` 2026-09-02: the docs site is hosted on Vercel (project root `apps/docs`, Astro
+  preset) at the root of its custom domain. That address is written once, as `homepage` in
+  `packages/core/package.json`: `apps/docs/src/site.ts` reads it for `site` (canonical URLs,
+  sitemap, og:image, llms.txt), and `task docs:readme` copies it into every README and the other
+  packages' `homepage`, with `task check` failing on drift. GitHub Pages was the first assumption
+  and was dropped: its `/<repo>` base path broke every asset URL on Vercel. The domain itself is
+  attached in the Vercel project settings and DNS, which the repo cannot see.
 - `[assumption]` Vercel's build image runs Bun 1.3.x, which cannot read the Bun 1.4 lockfile
   (`lockfileVersion: 2`). `apps/docs/vercel.json` pins the install to `bunx bun@1.4.0` from the
   repo root, Vercel's documented way; that version literal must move with `packageManager` in

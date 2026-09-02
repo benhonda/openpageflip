@@ -2,7 +2,7 @@
 
 React 19 bindings for [`@openpageflip/core`](https://www.npmjs.com/package/@openpageflip/core). Successor to [`react-pageflip`](https://www.npmjs.com/package/react-pageflip).
 
-Docs, live demos, the API reference and the changelog: **https://benhonda.github.io/openpageflip/**
+Docs, live demos, the API reference and the changelog: <!-- homepage -->**[openpageflip.shittylittleapps.com](https://openpageflip.shittylittleapps.com)**<!-- /homepage -->
 
 ```sh
 bun add @openpageflip/core @openpageflip/react

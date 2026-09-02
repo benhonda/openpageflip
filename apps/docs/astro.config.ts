@@ -8,16 +8,14 @@ import starlightLinksValidator from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 import { workspaceAlias } from "../../workspace-alias.ts";
-import { packageNames, repoUrl, siteDescription, siteTitle } from "./src/site.ts";
-
-// Vercel hosts the site at the root of its production domain and tells the build which one.
-// Locally there is no `site`, so canonical URLs and the sitemap are only produced on Vercel.
-const productionUrl = process.env["VERCEL_PROJECT_PRODUCTION_URL"];
+import { packageNames, repoUrl, siteDescription, siteTitle, siteUrl } from "./src/site.ts";
 
 const isDev = process.argv.includes("dev");
 
 export default defineConfig({
-  ...(productionUrl === undefined ? {} : { site: `https://${productionUrl}` }),
+  // Canonical URLs, the sitemap, og:image and llms.txt all need the absolute address, which is
+  // the core package's `homepage`. Vercel serves the site at the root of that domain.
+  site: siteUrl,
   // Dev and preview listen on every interface, so the site is reachable from outside the
   // devcontainer that `task start` runs in. Only the local servers read this.
   server: { host: true },
@@ -79,23 +77,18 @@ export default defineConfig({
         // Internal links, including those into the generated reference, are checked at build time.
         starlightLinksValidator(),
         // /llms.txt, /llms-full.txt and /llms-small.txt for AI assistants, from the same pages.
-        // The plugin needs absolute URLs, so like the sitemap it only exists when `site` is set.
-        ...(productionUrl === undefined
-          ? []
-          : [
-              starlightLlmsTxt({
-                optionalLinks: [
-                  { label: "Source on GitHub", url: repoUrl },
-                  ...packageNames.map((name) => ({
-                    label: `${name} on npm`,
-                    url: `https://www.npmjs.com/package/${name}`,
-                  })),
-                ],
-                // Release notes are the least useful pages for a reader trying to use the library.
-                demote: ["changelog/**"],
-                exclude: ["changelog/**"],
-              }),
-            ]),
+        starlightLlmsTxt({
+          optionalLinks: [
+            { label: "Source on GitHub", url: repoUrl },
+            ...packageNames.map((name) => ({
+              label: `${name} on npm`,
+              url: `https://www.npmjs.com/package/${name}`,
+            })),
+          ],
+          // Release notes are the least useful pages for a reader trying to use the library.
+          demote: ["changelog/**"],
+          exclude: ["changelog/**"],
+        }),
       ],
     }),
   ],

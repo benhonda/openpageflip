@@ -99,9 +99,9 @@ tasks:
       - bunx astro preview
 
   docs:readme:
-    desc: "Embed the docs examples into package READMEs (task docs:readme -- --check only verifies)"
+    desc: "Sync READMEs and manifests to the docs examples and the docs address (task docs:readme -- --check only verifies)"
     cmds:
-      - bun scripts/embed-examples.ts {{.CLI_ARGS}}
+      - bun scripts/sync-readmes.ts {{.CLI_ARGS}}
 
   changeset:
     desc: Record a changeset for the packages you touched
