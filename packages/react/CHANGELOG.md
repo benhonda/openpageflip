@@ -1,5 +1,13 @@
 # @openpageflip/react
 
+## 0.1.3
+
+### Patch Changes
+
+- [`79d7c99`](https://github.com/benhonda/openpageflip/commit/79d7c9926dba1e3493a689c55c700a4d244a973a) Thanks [@benhonda](https://github.com/benhonda)! - The quick-start pages embedded in the READMEs read a little more like a person wrote them. No code changes.
+- Updated dependencies [[`79d7c99`](https://github.com/benhonda/openpageflip/commit/79d7c9926dba1e3493a689c55c700a4d244a973a)]:
+  - @openpageflip/core@0.2.4
+
 ## 0.1.2
 
 ### Patch Changes

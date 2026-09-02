@@ -1,6 +1,6 @@
 {
   "name": "@openpageflip/react",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "React 19 bindings for @openpageflip/core. Successor to react-pageflip.",
   "license": "MIT",
   "type": "module",
