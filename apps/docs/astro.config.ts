@@ -29,6 +29,7 @@ export default defineConfig({
       social: [{ icon: "github", label: "GitHub", href: repoUrl }],
       editLink: { baseUrl: `${repoUrl}/edit/main/apps/docs/` },
       customCss: ["./src/styles/demo.css"],
+      components: { SocialIcons: "./src/components/HeaderLinks.astro" },
       sidebar: [
         { label: "Start here", items: [{ autogenerate: { directory: "start" } }] },
         { label: "Examples", items: [{ autogenerate: { directory: "examples" } }] },

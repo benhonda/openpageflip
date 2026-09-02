@@ -1,0 +1,35 @@
+---
+import { getEntry } from "astro:content";
+/**
+ * Starlight's header has no slot for text links, only social icons. This override renders the
+ * site's nav links first, then the default icons (the documented way to add header links).
+ * The splash page has no sidebar, so this is its way into the docs. Each link is resolved from
+ * the content collection, so a moved page fails the build instead of leaving a dead link.
+ */
+import Default from "@astrojs/starlight/components/SocialIcons.astro";
+
+const links = await Promise.all(
+  [
+    { text: "Docs", id: "start/core" },
+    { text: "Playground", id: "examples/playground" },
+  ].map(async ({ text, id }) => {
+    const entry = await getEntry("docs", id);
+    if (entry === undefined) throw new Error(`Header link "${text}": no docs page with id "${id}"`);
+    return { text, href: `/${entry.id}/` };
+  }),
+);
+---
+
+{links.map(({ text, href }) => <a {href} class="sl-flex nav-link">{text}</a>)}
+<Default {...Astro.props}><slot /></Default>
+
+<style>
+  .nav-link {
+    color: var(--sl-color-text-accent);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .nav-link:hover {
+    color: var(--sl-color-white);
+  }
+</style>

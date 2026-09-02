@@ -50,6 +50,10 @@ closed by design.
   - Internal links, including those into the generated reference, are validated at build.
   - Prose is the only hand-written part, and it points at those surfaces instead of restating
     them.
+  - `[settled]` 2026-09-02: the playground (`apps/docs/src/components/Playground.tsx`) is a site
+    component, not an example: every option as a control, the API as buttons, an event log, and
+    the options rendered as code generated from the controls' state. The landing page keeps the
+    quick start as its demo; the playground is the second surface, for exploring settings.
 - `[settled]` **The migration guide is data, not prose**: a typed table from `keyof FlipSetting`
   (the vendored `page-flip` types) to `keyof BookOptions`, so the type checker fails it when
   either API moves. Written in phase 5 once the backlog options exist.
