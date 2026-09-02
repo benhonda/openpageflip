@@ -135,6 +135,8 @@ this library. These are the places where it was wrong and we did not copy it:
   rested a frame short of its target.
 - No animation is shorter than a quarter of `flipDuration`. The original scaled duration with
   path length alone, so a hovered corner lifted and dropped in about 50ms: a snap.
+- A settling corner is left to land. The original restarted the drop on every mouse move, which
+  its 50ms drop hid; over a quarter second it stutters and never lands while the mouse moves.
 - Drag direction and corner come from where the press started, not from the first move.
 - `flipPrev` aims at the book's left edge, not the container's (StPageFlip #29 / PR #30).
 - Hard pages and hard shadows are placed from the book rect, so they are right when the book is

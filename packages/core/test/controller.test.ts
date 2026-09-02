@@ -227,6 +227,49 @@ describe("FlipController", () => {
     expect(last().flip?.fold.position).toEqual({ x: 205, y: 45 });
   });
 
+  test("a settling corner is not restarted by the pointer moving on; it lands on schedule", () => {
+    const { controller, manual, last } = setup();
+    controller.hover({ x: 470, y: 30 });
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    expect(last().flip?.fold.position).toEqual({ x: 200, y: 50 });
+
+    // Off the corner, and the mouse keeps moving while the corner settles.
+    controller.hover({ x: 300, y: 175 });
+    let previousX = 200;
+    for (let i = 0; i < 16; i++) {
+      manual.advance(16);
+      const position = last().flip?.fold.position;
+      if (position !== undefined) {
+        expect(position.x).toBeGreaterThan(previousX);
+        previousX = position.x;
+      }
+      controller.hover({ x: 300 + i, y: 175 });
+    }
+    // 256ms have passed: the 250ms settle has landed.
+    expect(last().flip).toBeNull();
+    expect(controller.currentState).toBe(FlipState.read);
+  });
+
+  test("another corner waits for the settling one; a lifted corner settles when the pointer jumps to another", () => {
+    const { controller, manual, last } = setup();
+    controller.hover({ x: 470, y: 30 });
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    // Straight from the top-right corner to the bottom-right one: the top one settles first.
+    controller.hover({ x: 470, y: 320 });
+    expect(controller.currentState).toBe(FlipState.read);
+    manual.advance(16);
+    expect(last().flip?.fold.position.x).toBeGreaterThan(200);
+    // Still settling; the bottom corner does not take over a top-corner fold.
+    controller.hover({ x: 470, y: 320 });
+    expect(controller.currentState).toBe(FlipState.read);
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    expect(last().flip).toBeNull();
+    // Settled: the next move lifts the bottom corner.
+    controller.hover({ x: 470, y: 320 });
+    expect(controller.currentState).toBe(FlipState.foldCorner);
+    expect(last().flip?.corner).toBe(FlipCorner.bottom);
+  });
+
   test("hovering the middle of a page lifts nothing", () => {
     const { controller, last } = setup();
     controller.hover({ x: 300, y: 175 });

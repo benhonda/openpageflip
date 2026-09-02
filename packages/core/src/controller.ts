@@ -342,22 +342,25 @@ export class FlipController {
     if (this.state !== FlipState.read && this.state !== FlipState.foldCorner) return;
     const { pageWidth, height } = this.rect;
 
-    if (!this.isOnCorner(containerPos)) {
-      if (this.session === null) return;
-      this.setState(FlipState.read);
-      this.stopTween();
-      void this.release();
+    const current = this.session;
+    if (current !== null) {
+      if (this.isOnCorner(containerPos) && this.isSessionCorner(containerPos, current)) {
+        // The pointer takes over from the lift (or a settle it came back into), so the two never
+        // fight over the fold.
+        this.stopTween();
+        this.setState(FlipState.foldCorner);
+        this.applyFold(containerToPage(containerPos, this.rect, current.direction));
+      } else if (this.state === FlipState.foldCorner) {
+        // Off the lifted corner (or onto another one): let it settle. A settle already running
+        // is left alone; restarting it on every move made the corner stutter and never land.
+        this.setState(FlipState.read);
+        this.stopTween();
+        void this.release();
+      }
       return;
     }
 
-    if (this.session !== null) {
-      // The pointer takes over from the lift (or a release it came back into), so the two never
-      // fight over the fold.
-      this.stopTween();
-      this.setState(FlipState.foldCorner);
-      this.applyFold(containerToPage(containerPos, this.rect, this.session.direction));
-      return;
-    }
+    if (!this.isOnCorner(containerPos)) return;
     const session = this.start(containerPos);
     if (session === null) return;
     this.setState(FlipState.foldCorner);
@@ -445,7 +448,7 @@ export class FlipController {
     this.endSession();
     const bookPos = containerToBook(containerPos, this.rect);
     const direction = this.directionAt(bookPos);
-    const corner = bookPos.y >= this.rect.height / 2 ? FlipCorner.bottom : FlipCorner.top;
+    const corner = this.cornerAt(bookPos);
 
     const canFlip =
       direction === FlipDirection.forward
@@ -540,6 +543,18 @@ export class FlipController {
         : FlipDirection.forward;
     }
     return bookPos.x < this.rect.width / 2 ? FlipDirection.back : FlipDirection.forward;
+  }
+
+  private cornerAt(bookPos: Point): FlipCorner {
+    return bookPos.y >= this.rect.height / 2 ? FlipCorner.bottom : FlipCorner.top;
+  }
+
+  /** Whether a point is in the corner a session was started from, not one of the other three. */
+  private isSessionCorner(containerPos: Point, session: Session): boolean {
+    const bookPos = containerToBook(containerPos, this.rect);
+    return (
+      this.directionAt(bookPos) === session.direction && this.cornerAt(bookPos) === session.corner
+    );
   }
 
   private isOnCorner(containerPos: Point): boolean {
