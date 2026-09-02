@@ -1,6 +1,6 @@
 {
   "name": "@openpageflip/core",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Realistic page-flip effect for HTML content. Framework-agnostic successor to StPageFlip.",
   "license": "MIT",
   "type": "module",

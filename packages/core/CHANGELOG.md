@@ -1,5 +1,11 @@
 # @openpageflip/core
 
+## 0.2.3
+
+### Patch Changes
+
+- [`0911652`](https://github.com/benhonda/openpageflip/commit/09116529e5f070a7ee6a5b36a975f1d285e3b449) Thanks [@benhonda](https://github.com/benhonda)! - READMEs and the packages' `homepage` point at the docs site's real address, https://openpageflip.shittylittleapps.com, instead of a GitHub Pages URL that never went live.
+
 ## 0.2.2
 
 ### Patch Changes
