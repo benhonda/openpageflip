@@ -1,0 +1,93 @@
+---
+import { events, methods, options, react } from "../migration/index.ts";
+
+/**
+ * Renders the migration tables from src/migration/index.ts. Every new name links into the
+ * generated reference, and the links validator checks those anchors at build.
+ */
+const ref = "/api/openpageflip";
+const anchor = (page: string, name: string) => `${page}/#${name.toLowerCase()}`;
+
+type Row = {
+  readonly from: string;
+  readonly to: string | null;
+  readonly href?: string;
+  readonly note?: string;
+};
+
+const optionRows: Row[] = Object.entries(options).map(([from, moved]) => ({
+  from,
+  to: moved.to,
+  ...(moved.to === null ? {} : { href: anchor(`${ref}/core/type-aliases/BookOptions`, moved.to) }),
+  ...(moved.note === undefined ? {} : { note: moved.note }),
+}));
+
+const methodRows: Row[] = Object.entries(methods).map(([from, moved]) => {
+  const to = "property" in moved ? moved.property : moved.to;
+  const shown = to === null ? null : "property" in moved ? `book.${to}` : `book.${to}()`;
+  return {
+    from: `${from}()`,
+    to: shown,
+    ...(to === null ? {} : { href: anchor(`${ref}/core/type-aliases/Book`, to) }),
+    ...(moved.note === undefined ? {} : { note: moved.note }),
+  };
+});
+
+const eventRows: Row[] = Object.entries(events).map(([from, moved]) => ({
+  from,
+  to: moved.to,
+  href: anchor(`${ref}/core/type-aliases/BookEvents`, moved.to),
+  note: moved.note,
+}));
+
+const reactRows: Row[] = Object.entries(react).map(([from, moved]) => ({
+  from,
+  to: moved.to,
+  ...(moved.note === undefined ? {} : { note: moved.note }),
+}));
+
+const tables = [
+  { title: "Options", old: "page-flip", rows: optionRows },
+  { title: "Methods", old: "PageFlip", rows: methodRows },
+  { title: "Events", old: "page-flip", rows: eventRows },
+  { title: "React props", old: "HTMLFlipBook", rows: reactRows },
+];
+---
+
+{
+  tables.map(({ title, old, rows }) => (
+    <section>
+      <h2 id={title.toLowerCase().replace(/\s+/g, "-")}>{title}</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>{old}</th>
+            <th>OpenPageFlip</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ from, to, href, note }) => (
+            <tr>
+              <td>
+                <code>{from}</code>
+              </td>
+              <td>
+                {to === null ? (
+                  <em>removed</em>
+                ) : href ? (
+                  <a href={href}>
+                    <code>{to}</code>
+                  </a>
+                ) : (
+                  <code>{to}</code>
+                )}
+              </td>
+              <td>{note}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  ))
+}

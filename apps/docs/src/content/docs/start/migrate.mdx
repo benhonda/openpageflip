@@ -1,0 +1,28 @@
+---
+title: Migrating from StPageFlip
+description: What changed between page-flip / react-pageflip and OpenPageFlip, as a table of every old option, method, event and prop and where it went.
+sidebar:
+  order: 4
+---
+
+import { PackageManagers } from "starlight-package-managers";
+import corePkg from "@openpageflip/core/package.json";
+import reactPkg from "@openpageflip/react/package.json";
+import Migration from "../../../components/Migration.astro";
+
+The names changed and there's no compatibility layer for the old ones, so this is a small migration rather than a version bump. The tables below list every option, method, event and React prop the old packages had and where each one went. They're typed against both APIs, so if a row is here it's current.
+
+Swap the dependency first. `page-flip` becomes the core package, `react-pageflip` becomes the React one (which needs the core package beside it and React 19):
+
+<PackageManagers pkg={corePkg.name} />
+
+<PackageManagers pkg={`${corePkg.name} ${reactPkg.name}`} />
+
+Then the shape of things, which is what the tables don't quite say on their own:
+
+- `new PageFlip(el, opts)` followed by `loadFromHTML(pages)` is one call now, `createBook(el, opts)`. The container's children are the pages, and the stylesheet is a separate import. The [quick start](/start/core/) is the full version.
+- The animated turns return a promise that resolves when the page lands, and the getters became plain properties. Everything the old class exposed for its own internals is gone.
+- Event names are the same. The handler gets a typed event with the fields named (`e.page`, `e.orientation`, `e.state`) instead of `e.data`, and `on` hands back the unsubscribe function.
+- In React, the ref is the book itself, so `ref.current.pageFlip().flipNext()` is just `ref.current.flipNext()`. Pages don't need refs any more.
+
+<Migration />

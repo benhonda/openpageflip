@@ -124,8 +124,8 @@ Each phase is anchored to the commit that landed it; the tests named are the pro
 5. **Docs, migration guide, 1.0.** Not started. Before calling the packages a replacement:
    `[open]` add Firefox and WebKit to the Vitest browser instances (everything so far is verified
    in Chromium only; the original's Safari workaround was dropped on research, not a test);
-   `[open]` write the migration guide from `page-flip` / `react-pageflip` option and method
-   names to ours; docs site with live demos landed in `apps/docs` (see Docs decisions);
+   migration guide from `page-flip` / `react-pageflip` names to ours and the docs site with live
+   demos are in `apps/docs` (see Docs decisions);
    `[open]` a real Next.js example app beside it.
 
 ## Deliberate differences from the original
