@@ -41,8 +41,6 @@ type Settings = {
   size: SizeMode;
   width: number;
   height: number;
-  minWidth: number;
-  maxWidth: number;
   flipDuration: number;
   easing: Easing;
   shadows: boolean;
@@ -63,8 +61,6 @@ const INITIAL: Settings = {
   size: SizeMode.stretch,
   width: 300,
   height: 420,
-  minWidth: 100,
-  maxWidth: 2000,
   flipDuration: 1000,
   easing: "linear",
   shadows: true,
@@ -85,8 +81,6 @@ function toOptions(s: Settings): Options {
     width: s.width,
     height: s.height,
     size: s.size,
-    minWidth: s.minWidth,
-    maxWidth: s.maxWidth,
     layout: s.layout,
     cover: s.cover,
     flipDuration: s.flipDuration,
@@ -339,6 +333,11 @@ export default function Playground(): ReactElement {
             value={settings.size}
             onChange={(v) => set("size", v)}
           />
+          {settings.size === SizeMode.stretch && (
+            <p className="hint">
+              Stretched to the container; width and height set the page's ratio.
+            </p>
+          )}
           <Slider
             label="Width"
             min={150}
@@ -352,21 +351,6 @@ export default function Playground(): ReactElement {
             max={500}
             value={settings.height}
             onChange={(v) => set("height", v)}
-          />
-          <Slider
-            label="Min width"
-            min={50}
-            max={400}
-            value={settings.minWidth}
-            onChange={(v) => set("minWidth", v)}
-          />
-          <Slider
-            label="Max width"
-            min={200}
-            max={2000}
-            step={50}
-            value={settings.maxWidth}
-            onChange={(v) => set("maxWidth", v)}
           />
           <Toggle label="Shadows" checked={settings.shadows} onChange={(v) => set("shadows", v)} />
           <Slider

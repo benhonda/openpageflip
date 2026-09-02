@@ -90,6 +90,12 @@
   font-size: 0.85rem;
 }
 
+.playground .hint {
+  margin: 0;
+  color: var(--sl-color-gray-3);
+  font-size: 0.8rem;
+}
+
 .playground legend {
   padding: 0 0.25rem;
   font-weight: 600;
