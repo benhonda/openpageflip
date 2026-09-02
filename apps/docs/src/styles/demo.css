@@ -16,18 +16,6 @@
   max-width: 48rem;
 }
 
-/*
- * Until the library lays the book out (its script arriving is what takes the time), the pages
- * would show as plain stacked HTML. Hide them and keep a book-shaped footprint so nothing jumps.
- * The ratio is a placeholder for that moment only; the library sets the real one on mount.
- */
-.example-demo .book:not(.opf-book):not(:has(.opf-book)) {
-  aspect-ratio: 10 / 7;
-}
-.example-demo .book:not(.opf-book):not(:has(.opf-book)) .page {
-  display: none;
-}
-
 .example-demo .page {
   box-sizing: border-box;
   padding: 1.5rem;
@@ -45,6 +33,18 @@
 
 .example-demo .page:nth-child(odd) {
   box-shadow: inset 0.5rem 0 1rem -0.5rem rgb(0 0 0 / 0.08);
+}
+
+/*
+ * Until the library lays the book out (its script arriving is what takes the time), the pages
+ * would show as plain stacked HTML. Hide them and keep a book-shaped footprint so nothing jumps.
+ * The ratio is a placeholder for that moment only; the library sets the real one on mount.
+ */
+.example-demo .book:not(.opf-book):not(:has(.opf-book)) {
+  aspect-ratio: 10 / 7;
+}
+.example-demo .book:not(.opf-book):not(:has(.opf-book)) .page {
+  display: none;
 }
 
 .example-demo .page-cover {

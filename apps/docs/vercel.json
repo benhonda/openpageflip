@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "cd ../.. && bunx bun@1.4.0 install --frozen-lockfile",
-  "buildCommand": "test -n \"$VERCEL_PROJECT_PRODUCTION_URL\" || { echo 'VERCEL_PROJECT_PRODUCTION_URL is unset: astro.config.ts needs it for canonical URLs, the sitemap and og:image. Turn on \"Automatically expose System Environment Variables\" in the Vercel project settings.'; exit 1; }; bunx astro build"
+  "buildCommand": "test -n \"$VERCEL_PROJECT_PRODUCTION_URL\" || { echo 'VERCEL_PROJECT_PRODUCTION_URL is unset: astro.config.ts needs it for canonical URLs, the sitemap and og:image. Turn on \"Automatically expose System Environment Variables\" in the Vercel project settings.'; exit 1; }; test \"$(git rev-parse --is-shallow-repository)\" = false || { echo 'This is a shallow clone: Starlight dates every page from git history (lastUpdated in astro.config.ts). Set VERCEL_DEEP_CLONE=true in the Vercel project environment variables.'; exit 1; }; bunx astro build"
 }

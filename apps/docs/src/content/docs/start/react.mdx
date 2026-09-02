@@ -8,9 +8,7 @@ sidebar:
 import { PackageManagers } from "starlight-package-managers";
 import corePkg from "@openpageflip/core/package.json";
 import reactPkg from "@openpageflip/react/package.json";
-import Example from "../../../components/Example.astro";
-import Quickstart from "../../../examples/react/Quickstart.tsx";
-import quickstartSource from "../../../examples/react/Quickstart.tsx?raw";
+import ReactExample from "../../../components/ReactExample.astro";
 
 The React package needs React 19 and the core package beside it.
 
@@ -20,9 +18,7 @@ The React package needs React 19 and the core package beside it.
 
 Every direct child of `FlipBook` is a page. `Page` marks the hard ones and puts a class or style on the page element itself. Nothing needs a ref or `forwardRef`. This is the component running, and the file that renders it:
 
-<Example code={quickstartSource} lang="tsx" title="Quickstart.tsx">
-  <Quickstart client:load />
-</Example>
+<ReactExample name="Quickstart" />
 
 ## What the props do
 

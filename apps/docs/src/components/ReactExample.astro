@@ -1,0 +1,33 @@
+---
+/**
+ * Hydrates `src/examples/react/<name>.tsx` and shows its source, the React counterpart of
+ * CoreExample. Pages go through this rather than putting the component in MDX themselves,
+ * because MDX renders its children eagerly, and a text twin (see `isTextTwin`) must not try
+ * to render React at all. Each example gets its own tag below, not a glob and a dynamic tag
+ * like CoreExample, because Astro only hydrates a tag whose name is an import of this file.
+ */
+import Controlled from "../examples/react/Controlled.tsx";
+import Quickstart from "../examples/react/Quickstart.tsx";
+import { isTextTwin } from "../site.ts";
+import Example from "./Example.astro";
+
+interface Props {
+  name: "Controlled" | "Quickstart";
+}
+
+const { name } = Astro.props;
+const live = !isTextTwin(Astro.url);
+
+const sources = import.meta.glob<string>("../examples/react/*.tsx", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+const code = sources[`../examples/react/${name}.tsx`];
+if (code === undefined) throw new Error(`No React example named "${name}" in src/examples/react`);
+---
+
+<Example code={code} lang="tsx" title={`${name}.tsx`}>
+  {live && name === "Controlled" && <Controlled client:load />}
+  {live && name === "Quickstart" && <Quickstart client:load />}
+</Example>

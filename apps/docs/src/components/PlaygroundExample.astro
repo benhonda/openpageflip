@@ -1,0 +1,15 @@
+---
+/**
+ * The playground on a page. Same reason as ReactExample: MDX renders its children eagerly, and
+ * a text twin (see `isTextTwin`) must not try to render React at all.
+ */
+import { isTextTwin } from "../site.ts";
+import Example from "./Example.astro";
+import Playground from "./Playground.tsx";
+
+const live = !isTextTwin(Astro.url);
+---
+
+<Example>
+  {live && <Playground client:load />}
+</Example>

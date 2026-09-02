@@ -1,9 +1,11 @@
 ---
 /**
  * A live demo above the source that produced it. The slot is the demo; `code` is the same
- * file's text, so the page can never show code that differs from what runs.
+ * file's text, so the page can never show code that differs from what runs. A text twin (see
+ * `isTextTwin`) gets the code only.
  */
 import { Code } from "@astrojs/starlight/components";
+import { isTextTwin } from "../site.ts";
 
 interface Props {
   code?: string | undefined;
@@ -12,9 +14,10 @@ interface Props {
 }
 
 const { code, lang, title } = Astro.props;
+const live = !isTextTwin(Astro.url);
 ---
 
 <div class="example">
-  <div class="example-demo not-content"><slot /></div>
+  {live && <div class="example-demo not-content"><slot /></div>}
   {code !== undefined && <Code code={code} lang={lang} title={title} />}
 </div>

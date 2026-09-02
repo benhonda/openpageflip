@@ -1,0 +1,122 @@
+---
+import { repoUrl } from "../site.ts";
+
+/**
+ * The FAQ is this list, rendered once as the page and once as schema.org FAQPage data, so the
+ * answer a search engine or AI assistant quotes is the answer a reader sees. Answers are plain
+ * text because the structured data is; a link after the answer points at the page with more.
+ */
+type Question = {
+  readonly question: string;
+  readonly answer: string;
+  readonly more?: { readonly text: string; readonly href: string };
+};
+
+const faq: readonly Question[] = [
+  {
+    question: "Is this StPageFlip?",
+    answer:
+      "It's a rebuild of it. StPageFlip and react-pageflip haven't had a commit since April 2021, so we kept the part that makes the fold look right (the geometry maths, still MIT, still Oleg Litovski's) and rewrote everything around it in strict TypeScript. The look is held to the original by a test that runs the published page-flip 2.0.7 next to this library and compares screenshots, and the handful of places where we chose to differ are written down.",
+    more: { text: "The differences, in the spec", href: `${repoUrl}/blob/main/SPEC.md` },
+  },
+  {
+    question: "Can I drop it in where page-flip or react-pageflip was?",
+    answer:
+      "Not without changes. The options and methods have new names and there's no compatibility layer for the old ones, so it's a small migration rather than a version bump. The reference lists every option with its default, straight from the source.",
+    more: { text: "The core reference", href: "/api/openpageflip/core/" },
+  },
+  {
+    question: "Does it work without React?",
+    answer:
+      "Yes. The core package is plain TypeScript with no framework in it, so it works from Vue, Svelte, or a page with no framework at all. There's also a single-file build for a script tag that puts createBook on window.OpenPageFlip, for a CDN and no bundler.",
+    more: { text: "Using it without a bundler", href: "/start/core/#without-a-bundler" },
+  },
+  {
+    question: "What does the React package need?",
+    answer:
+      "React 19, and the core package installed beside it. Every direct child of FlipBook is a page and every core option is a prop. Your page components don't need refs or forwardRef; the wrapper owns the page elements.",
+    more: { text: "The React quick start", href: "/start/react/" },
+  },
+  {
+    question: "Does it render on the server (Next.js, Astro)?",
+    answer:
+      'Yes. Nothing in either package touches window when it\'s imported, and FlipBook ships with "use client" and renders to HTML on the server. The React demo on this site is server-rendered by Astro and then hydrated, and the test suite renders it with renderToString in Node.',
+  },
+  {
+    question: "Does it work on phones?",
+    answer:
+      "Yes. Input is pointer events, so mouse, touch and pen all drag a corner, and a quick horizontal swipe turns the page. With layout left at auto the book shows a spread when the container is wide enough for two pages and a single page when it isn't.",
+    more: { text: "Every option, in the playground", href: "/examples/playground/" },
+  },
+  {
+    question: "Can pages hold links, buttons and forms?",
+    answer:
+      "Yes. A press that starts on a link, button or form field never starts a flip, so the control just works. That's the ignoreDragOn option, and its default selector also matches anything with a data-opf-no-flip attribute, so you can opt other elements out too.",
+  },
+  {
+    question: "How do I get hard covers?",
+    answer:
+      'Set cover to true so the first and last pages show on their own, and give a page data-density="hard" (or the density prop on Page in React) to make it rigid. Hard and soft pages can be mixed in one book.',
+    more: { text: "The plain JavaScript quick start", href: "/start/core/" },
+  },
+  {
+    question: "Can a page be an image?",
+    answer:
+      "A page is any element, so an img tag works, and so does anything else you can put in the DOM. Everything is drawn with the DOM; there is no canvas renderer.",
+  },
+  {
+    question: "Does it respect reduced motion?",
+    answer:
+      "Yes. When prefers-reduced-motion is on, a flip lands instantly instead of animating. Keyboard navigation and ARIA labelling aren't done yet; they're on the list before 1.0.",
+  },
+  {
+    question: "What does an idle book cost?",
+    answer:
+      "Nothing. Frames are drawn only when something changes, never on a timer, and destroy() stops everything and puts your DOM back the way it was.",
+  },
+  {
+    question: "Is it ready for production?",
+    answer:
+      "It's pre-1.0. The rendering is pixel-matched to the original, but the version stays at 0.x until the backlog of issues from the original projects is closed. Everything is verified in Chromium so far; Firefox and WebKit runs are still to come.",
+    more: { text: "What has changed, release by release", href: "/changelog/core/" },
+  },
+  {
+    question: "What's the licence?",
+    answer:
+      "MIT, the same as the original. The fold geometry derives from StPageFlip, and the licence credits it.",
+    more: { text: "The licence file", href: `${repoUrl}/blob/main/LICENSE` },
+  },
+];
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faq.map(({ question, answer }) => ({
+    "@type": "Question",
+    name: question,
+    acceptedAnswer: { "@type": "Answer", text: answer },
+  })),
+};
+
+/** Heading ids the way Starlight slugs its own headings, so anchors read like the rest of the site. */
+const slug = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+---
+
+<script type="application/ld+json" is:inline set:html={JSON.stringify(structuredData)} />
+{
+  faq.map(({ question, answer, more }) => (
+    <section>
+      <h2 id={slug(question)}>{question}</h2>
+      <p>{answer}</p>
+      {more && (
+        <p>
+          <a href={more.href}>{more.text}</a>
+        </p>
+      )}
+    </section>
+  ))
+}
