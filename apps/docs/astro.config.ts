@@ -7,8 +7,7 @@ import starlightChangelogs, { makeChangelogsSidebarLinks } from "starlight-chang
 import starlightLinksValidator from "starlight-links-validator";
 import starlightTypeDoc, { typeDocSidebarGroup } from "starlight-typedoc";
 import { workspaceAlias } from "../../workspace-alias.ts";
-
-const repoUrl = corePkg.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
+import { repoUrl, siteDescription, siteTitle } from "./src/site.ts";
 
 // Vercel hosts the site at the root of its production domain and tells the build which one.
 // Locally there is no `site`, so canonical URLs and the sitemap are only produced on Vercel.
@@ -20,12 +19,19 @@ export default defineConfig({
   // devcontainer that `task start` runs in. Only the local servers read this.
   server: { host: true },
   // Examples and the reference come from packages/*/src, the same way the tests resolve them.
-  vite: { resolve: { alias: workspaceAlias } },
+  vite: {
+    resolve: { alias: workspaceAlias },
+    // The dev server pre-bundles what src/pages imports; resvg is a native Node addon and must
+    // stay a plain import (it only ever runs at build, rendering og.png).
+    optimizeDeps: { exclude: ["@resvg/resvg-js"] },
+  },
   integrations: [
     react(),
     starlight({
-      title: "OpenPageFlip",
-      description: corePkg.description,
+      title: siteTitle,
+      description: siteDescription,
+      // Adds the Open Graph image tags to every page.
+      routeMiddleware: "./src/routeData.ts",
       social: [{ icon: "github", label: "GitHub", href: repoUrl }],
       editLink: { baseUrl: `${repoUrl}/edit/main/apps/docs/` },
       customCss: ["./src/styles/demo.css"],

@@ -10,6 +10,7 @@ export default defineConfig({
   test: {
     name: "@openpageflip/docs",
     include: ["test/**/*.test.{ts,tsx}"],
+    exclude: ["**/*.node.test.ts", "**/node_modules/**"],
     browser: {
       enabled: true,
       headless: true,

@@ -6,9 +6,12 @@
   "dependencies": {
     "@astrojs/react": "^6.0.5",
     "@astrojs/starlight": "^0.41.11",
+    "@fontsource/inter": "^5.3.0",
     "@openpageflip/core": "workspace:*",
     "@openpageflip/react": "workspace:*",
+    "@resvg/resvg-js": "^2.6.2",
     "astro": "^7.2.10",
+    "satori": "^0.33.4",
     "starlight-changelogs": "^0.6.0",
     "starlight-links-validator": "^0.25.3",
     "starlight-package-managers": "^0.12.0",
