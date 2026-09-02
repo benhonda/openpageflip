@@ -188,18 +188,43 @@ describe("FlipController", () => {
     expect(await settle(controller.flipTo(4, FlipCorner.top), manual)).toBe(false);
   });
 
-  test("hovering a corner lifts it; leaving drops it", () => {
+  test("hovering a corner lifts it over a quarter of flipDuration; leaving settles it as slowly", () => {
     const { controller, manual, last } = setup();
     controller.hover({ x: 470, y: 30 });
     expect(controller.currentState).toBe(FlipState.foldCorner);
+    // Halfway through the 250ms lift the corner is part way up, not already there.
+    for (let i = 0; i < 8; i++) manual.advance(16);
+    const midway = last().flip?.fold.position;
+    expect(midway?.x).toBeGreaterThan(200);
+    expect(midway?.x).toBeLessThan(249);
     for (let i = 0; i < 10; i++) manual.advance(16);
-    expect(last().flip).not.toBeNull();
     expect(last().flip?.fold.position).toEqual({ x: 200, y: 50 });
+
     controller.hoverEnd();
-    for (let i = 0; i < 20; i++) manual.advance(16);
     expect(controller.currentState).toBe(FlipState.read);
+    // The drop animates too: part way through, the corner is still folded.
+    for (let i = 0; i < 8; i++) manual.advance(16);
+    expect(last().flip).not.toBeNull();
+    for (let i = 0; i < 10; i++) manual.advance(16);
     expect(last().flip).toBeNull();
     expect(controller.page).toBe(0);
+  });
+
+  test("the pointer takes over a hovered corner mid-lift, and leaving mid-drop resumes the fold", () => {
+    const { controller, manual, last } = setup();
+    controller.hover({ x: 470, y: 30 });
+    manual.advance(16);
+    controller.hover({ x: 455, y: 45 });
+    manual.advance(16);
+    // The lift no longer runs: the fold stays where the pointer put it.
+    expect(last().flip?.fold.position).toEqual({ x: 205, y: 45 });
+    controller.hover({ x: 300, y: 175 });
+    manual.advance(16);
+    expect(controller.currentState).toBe(FlipState.read);
+    controller.hover({ x: 455, y: 45 });
+    expect(controller.currentState).toBe(FlipState.foldCorner);
+    manual.advance(16);
+    expect(last().flip?.fold.position).toEqual({ x: 205, y: 45 });
   });
 
   test("hovering the middle of a page lifts nothing", () => {

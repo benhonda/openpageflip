@@ -83,6 +83,11 @@ const DRAG_THRESHOLD = 5;
 const HOVER_LIFT = 50;
 /** Animation paths longer than this take the full `flipDuration`; shorter ones scale down. */
 const FULL_FLIP_LENGTH = 1000;
+/**
+ * No animation is shorter than this fraction of `flipDuration`, however short its path. Scaled
+ * alone, a hovered corner dropping 50px would take 50ms: a snap, not a settle. The original snapped.
+ */
+const SHORTEST_FLIP = 0.25;
 
 export class FlipController {
   private pages: PageModel[];
@@ -298,7 +303,8 @@ export class FlipController {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const length = Math.max(Math.abs(dx), Math.abs(dy));
-    const duration = Math.min(1, length / FULL_FLIP_LENGTH) * this.options.flipDuration;
+    const duration =
+      Math.max(SHORTEST_FLIP, Math.min(1, length / FULL_FLIP_LENGTH)) * this.options.flipDuration;
 
     return new Promise((resolve) => {
       this.settleTween = resolve;
@@ -339,12 +345,16 @@ export class FlipController {
     if (!this.isOnCorner(containerPos)) {
       if (this.session === null) return;
       this.setState(FlipState.read);
-      this.tween?.finish();
+      this.stopTween();
       void this.release();
       return;
     }
 
     if (this.session !== null) {
+      // The pointer takes over from the lift (or a release it came back into), so the two never
+      // fight over the fold.
+      this.stopTween();
+      this.setState(FlipState.foldCorner);
       this.applyFold(containerToPage(containerPos, this.rect, this.session.direction));
       return;
     }
@@ -366,7 +376,7 @@ export class FlipController {
   hoverEnd(): void {
     if (this.state !== FlipState.foldCorner) return;
     this.setState(FlipState.read);
-    this.tween?.finish();
+    this.stopTween();
     void this.release();
   }
 
@@ -476,11 +486,16 @@ export class FlipController {
     return this.session;
   }
 
-  private endSession(): void {
+  /** Stop the running animation where it is, settling its promise with "did not turn". */
+  private stopTween(): void {
     this.tween?.cancel();
     this.tween = null;
     this.settleTween?.(false);
     this.settleTween = null;
+  }
+
+  private endSession(): void {
+    this.stopTween();
     this.session = null;
     for (const page of this.pages) page.drawingDensity = page.density;
   }
