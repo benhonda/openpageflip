@@ -123,14 +123,54 @@ describe("FlipController", () => {
     expect(controller.page).toBe(2);
   });
 
-  test("click mode 'corners' ignores clicks in the middle of a page", () => {
-    const { controller } = setup({ click: "corners" });
+  test("by default a click turns from the page's outer edge, at any height, not from the middle", () => {
+    const { controller } = setup();
+    // The strip is a fifth of the page diagonal wide: 86px of a 250x350 page.
     controller.pointerDown({ x: 400, y: 175 });
     controller.pointerUp({ x: 400, y: 175 });
     expect(controller.currentState).toBe(FlipState.read);
-    controller.pointerDown({ x: 490, y: 10 });
-    controller.pointerUp({ x: 490, y: 10 });
+    controller.pointerDown({ x: 420, y: 175 });
+    controller.pointerUp({ x: 420, y: 175 });
     expect(controller.currentState).toBe(FlipState.flipping);
+  });
+
+  test("click: 'anywhere' turns from the middle of a page", () => {
+    const { controller } = setup({ click: "anywhere" });
+    controller.pointerDown({ x: 400, y: 175 });
+    controller.pointerUp({ x: 400, y: 175 });
+    expect(controller.currentState).toBe(FlipState.flipping);
+  });
+
+  test("a press in the middle of a page is not taken hold of: it neither folds nor clicks", () => {
+    const { controller, last } = setup();
+    expect(controller.pointerDown({ x: 400, y: 175 })).toBe(false);
+    controller.pointerDrag({ x: 200, y: 120 });
+    expect(last().flip).toBeNull();
+    controller.pointerUp({ x: 200, y: 120 });
+    expect(controller.currentState).toBe(FlipState.read);
+    expect(controller.page).toBe(0);
+    expect(controller.pointerDown({ x: 470, y: 40 })).toBe(true);
+  });
+
+  test("with drag and click both off, a press is not taken hold of and hover lifts nothing", () => {
+    const { controller, last } = setup({ drag: false, click: "off" });
+    expect(controller.pointerDown({ x: 470, y: 40 })).toBe(false);
+    controller.pointerUp({ x: 470, y: 40 });
+    controller.hover({ x: 470, y: 40 });
+    expect(controller.currentState).toBe(FlipState.read);
+    expect(last().flip).toBeNull();
+  });
+
+  test("in portrait the visible page's spine-side edge turns back and its outer edge forward", () => {
+    // 300px container: one 300x420 page, so the edge strip is 103px wide.
+    const { controller } = setup({ startPage: 2 }, 6, { w: 300, h: 420 });
+    controller.pointerDown({ x: 150, y: 200 });
+    controller.pointerUp({ x: 150, y: 200 });
+    expect(controller.currentState).toBe(FlipState.read);
+    controller.pointerDown({ x: 40, y: 200 });
+    controller.pointerUp({ x: 40, y: 200 });
+    expect(controller.currentState).toBe(FlipState.flipping);
+    expect(controller.frame().flip?.direction).toBe("back");
   });
 
   test("flipTo during a running flip lands it first, then aims from there", async () => {
@@ -268,6 +308,40 @@ describe("FlipController", () => {
     controller.hover({ x: 470, y: 320 });
     expect(controller.currentState).toBe(FlipState.foldCorner);
     expect(last().flip?.corner).toBe(FlipCorner.bottom);
+  });
+
+  test("hovering mid-edge lifts the nearer corner, which stays lifted across the midline", () => {
+    const { controller, manual, last } = setup();
+    controller.hover({ x: 470, y: 150 });
+    expect(controller.currentState).toBe(FlipState.foldCorner);
+    expect(last().flip?.corner).toBe(FlipCorner.top);
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    expect(last().flip?.fold.position).toEqual({ x: 200, y: 50 });
+    // Into the bottom half, but not near the bottom corner: nothing changes.
+    controller.hover({ x: 470, y: 200 });
+    manual.advance(16);
+    expect(controller.currentState).toBe(FlipState.foldCorner);
+    expect(last().flip?.corner).toBe(FlipCorner.top);
+    expect(last().flip?.fold.position).toEqual({ x: 200, y: 50 });
+    // At the bottom corner the top one settles, as when jumping between corners.
+    controller.hover({ x: 470, y: 300 });
+    expect(controller.currentState).toBe(FlipState.read);
+  });
+
+  test("a corner the pointer took over eases back to its lift point when the pointer moves down the edge", () => {
+    const { controller, manual, last } = setup();
+    controller.hover({ x: 470, y: 30 });
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    controller.hover({ x: 455, y: 45 });
+    manual.advance(16);
+    expect(last().flip?.fold.position).toEqual({ x: 205, y: 45 });
+    controller.hover({ x: 470, y: 150 });
+    expect(controller.currentState).toBe(FlipState.foldCorner);
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    expect(last().flip?.fold.position).toEqual({ x: 200, y: 50 });
+    // Once back at rest, further moves along the edge start nothing.
+    controller.hover({ x: 470, y: 160 });
+    expect(manual.pending()).toBe(0);
   });
 
   test("hovering the middle of a page lifts nothing", () => {

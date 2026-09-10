@@ -1,8 +1,9 @@
 /**
  * The headless heart of the book: which spread is open, what a pointer is doing to a corner,
  * and where the flip animation is. It knows nothing about the DOM; it hands `Frame`s to a
- * renderer. The behaviour (corner detection, hover fold, drop thresholds, animation paths)
- * is the original's, so the book feels the same.
+ * renderer. The behaviour (hover fold, drop thresholds, animation paths) is the original's, so
+ * the book feels the same. One thing is ours: hover, click and drag all act on the same zone (see
+ * `isHandle`), so a corner lifts only where a press would turn the page.
  */
 import { type Clock, startTween, type Tween } from "./animation.ts";
 import { containerToBook, containerToPage } from "./coords.ts";
@@ -340,19 +341,34 @@ export class FlipController {
   /** Mouse moving over the book without a button down. */
   hover(containerPos: Point): void {
     if (this.state !== FlipState.read && this.state !== FlipState.foldCorner) return;
-    const { pageWidth, height } = this.rect;
 
     const current = this.session;
     if (current !== null) {
-      if (this.isOnCorner(containerPos) && this.isSessionCorner(containerPos, current)) {
-        // The pointer takes over from the lift (or a settle it came back into), so the two never
-        // fight over the fold.
+      const bookPos = containerToBook(containerPos, this.rect);
+      const held = this.isHandle(containerPos) && this.directionAt(bookPos) === current.direction;
+      const nearCorner = this.isNearCorner(containerPos);
+      if (held && nearCorner && this.cornerAt(bookPos) === current.corner) {
+        // Close to the lifted corner the pointer takes over from the lift (or a settle it came
+        // back into), so the two never fight over the fold.
         this.stopTween();
         this.setState(FlipState.foldCorner);
         this.applyFold(containerToPage(containerPos, this.rect, current.direction));
+      } else if (held && !nearCorner) {
+        // Along the edge but away from the corner: the corner stays lifted instead of flapping
+        // with every move across the page's midline. One the pointer had taken over eases back
+        // to its lift point.
+        const lift = this.liftPoint(current);
+        if (
+          this.state === FlipState.foldCorner &&
+          this.tween === null &&
+          current.fold !== null &&
+          distance(current.fold.position, lift) > 0.5
+        ) {
+          void this.animateTo(current.fold.position, lift, false, false);
+        }
       } else if (this.state === FlipState.foldCorner) {
-        // Off the lifted corner (or onto another one): let it settle. A settle already running
-        // is left alone; restarting it on every move made the corner stutter and never land.
+        // Off the page (or onto another corner): let it settle. A settle already running is left
+        // alone; restarting it on every move made the corner stutter and never land.
         this.setState(FlipState.read);
         this.stopTween();
         void this.release();
@@ -360,19 +376,24 @@ export class FlipController {
       return;
     }
 
-    if (!this.isOnCorner(containerPos)) return;
+    if (!this.isPressable(containerPos)) return;
     const session = this.start(containerPos);
     if (session === null) return;
     this.setState(FlipState.foldCorner);
-    this.applyFold({ x: pageWidth - 1, y: 1 });
-    const yStart = session.corner === FlipCorner.bottom ? height - 1 : 1;
-    const yDest = session.corner === FlipCorner.bottom ? height - HOVER_LIFT : HOVER_LIFT;
-    void this.animateTo(
-      { x: pageWidth - 1, y: yStart },
-      { x: pageWidth - HOVER_LIFT, y: yDest },
-      false,
-      false,
-    );
+    const from = {
+      x: session.pageWidth - 1,
+      y: session.corner === FlipCorner.bottom ? session.pageHeight - 1 : 1,
+    };
+    this.applyFold(from);
+    void this.animateTo(from, this.liftPoint(session), false, false);
+  }
+
+  /** Where a hovered corner rests once lifted, in page space. */
+  private liftPoint(session: Session): Point {
+    return {
+      x: session.pageWidth - HOVER_LIFT,
+      y: session.corner === FlipCorner.bottom ? session.pageHeight - HOVER_LIFT : HOVER_LIFT,
+    };
   }
 
   /** The mouse left the book: drop any hovered corner. */
@@ -383,20 +404,26 @@ export class FlipController {
     void this.release();
   }
 
-  pointerDown(containerPos: Point): void {
+  /**
+   * Returns whether the press took hold of a page: it can click or drag a corner, so the caller
+   * should keep the browser's own selection away from it. A press elsewhere is still tracked, so
+   * a swipe can start anywhere, but it never clicks or folds.
+   */
+  pointerDown(containerPos: Point): boolean {
     // Pressing during a flip lands it; the press then acts on the settled book.
     if (this.state === FlipState.flipping) this.tween?.finish();
     this.pressStart = containerPos;
     this.dragged = false;
+    return this.isPressable(containerPos);
   }
 
   /** A pressed pointer moved. Starts a drag once it travels past the click threshold. */
   pointerDrag(containerPos: Point): void {
     if (this.pressStart === null) return;
     if (!this.dragged && distance(this.pressStart, containerPos) <= DRAG_THRESHOLD) return;
-    // A press that travelled is a drag even when dragging is off: releasing it must not click.
+    // A press that travelled is a drag even when it cannot fold: releasing it must not click.
     this.dragged = true;
-    if (!this.options.drag) return;
+    if (!this.options.drag || !this.isHandle(this.pressStart)) return;
     // Direction and corner come from where the press started, so a fast drag across the spine
     // cannot flip the wrong way. (The original decided from the first move instead.)
     const session = this.session ?? this.start(this.pressStart);
@@ -436,8 +463,7 @@ export class FlipController {
   }
 
   private click(containerPos: Point): void {
-    if (this.options.click === ClickMode.off) return;
-    if (this.options.click === ClickMode.corners && !this.isOnCorner(containerPos)) return;
+    if (this.options.click === ClickMode.off || !this.isHandle(containerPos)) return;
     void this.flipFrom(containerPos);
   }
 
@@ -549,26 +575,51 @@ export class FlipController {
     return bookPos.y >= this.rect.height / 2 ? FlipCorner.bottom : FlipCorner.top;
   }
 
-  /** Whether a point is in the corner a session was started from, not one of the other three. */
-  private isSessionCorner(containerPos: Point, session: Session): boolean {
-    const bookPos = containerToBook(containerPos, this.rect);
+  // ---- where a page can be taken hold of --------------------------------------------------------
+
+  /** How far from a page's outer edge, or a corner, still counts: the original's corner reach. */
+  private get reach(): number {
+    const { pageWidth, height } = this.rect;
+    return Math.sqrt(pageWidth ** 2 + height ** 2) / 5;
+  }
+
+  /** Book-space x where the visible pages start: in portrait only the right half is shown. */
+  private get visibleLeft(): number {
+    return this.orientation === Orientation.portrait ? this.rect.pageWidth : 0;
+  }
+
+  private isOnPage(bookPos: Point): boolean {
+    const { width, height } = this.rect;
+    return bookPos.x > this.visibleLeft && bookPos.x < width && bookPos.y > 0 && bookPos.y < height;
+  }
+
+  /** The strip along each visible page's outer edge, the full height of the page. */
+  private isOnEdge(bookPos: Point): boolean {
+    return bookPos.x < this.visibleLeft + this.reach || bookPos.x > this.rect.width - this.reach;
+  }
+
+  /**
+   * Whether a point is where a page can be taken hold of: the edge strip, or with
+   * `click: "anywhere"` the whole page. Hover, click and drag all ask this one question, so a
+   * lifted corner never promises what a press would not do.
+   */
+  private isHandle(containerPos: Point): boolean {
+    const p = containerToBook(containerPos, this.rect);
+    return this.isOnPage(p) && (this.options.click === ClickMode.anywhere || this.isOnEdge(p));
+  }
+
+  /** A handle where a press can actually do something: click, drag, or both. Hover lifts nothing elsewhere. */
+  private isPressable(containerPos: Point): boolean {
     return (
-      this.directionAt(bookPos) === session.direction && this.cornerAt(bookPos) === session.corner
+      this.isHandle(containerPos) && (this.options.drag || this.options.click !== ClickMode.off)
     );
   }
 
-  private isOnCorner(containerPos: Point): boolean {
-    const { pageWidth, height, width } = this.rect;
-    const reach = Math.sqrt(pageWidth ** 2 + height ** 2) / 5;
+  /** Whether a point is close enough to a corner for that corner to follow the pointer. */
+  private isNearCorner(containerPos: Point): boolean {
     const p = containerToBook(containerPos, this.rect);
-    return (
-      p.x > 0 &&
-      p.y > 0 &&
-      p.x < width &&
-      p.y < height &&
-      (p.x < reach || p.x > width - reach) &&
-      (p.y < reach || p.y > height - reach)
-    );
+    const reach = this.reach;
+    return this.isOnPage(p) && this.isOnEdge(p) && (p.y < reach || p.y > this.rect.height - reach);
   }
 
   private setState(state: FlipState): void {

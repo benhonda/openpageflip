@@ -1,0 +1,5 @@
+---
+"@openpageflip/core": minor
+---
+
+Hover, click and drag now act on the same part of a page, and by default that part is the outer edge. Before, a corner lifted when the mouse came near it, but a click or a drag anywhere on the page turned it too, so the lifted corner promised something it didn't mean. `click: "edges"` is the new default: the strip along each page's outer edge is where a corner lifts, a click turns and a drag starts. `"corners"` is gone; `"anywhere"` is still there for tap-anywhere books, and its hover cue now covers the whole page to match. Along the edge the nearer corner lifts and stays lifted until the pointer leaves the edge or reaches the other corner, instead of flapping at the midline. The middle of a page is the browser's again: text selects, and the stylesheet no longer sets `user-select: none`. A swipe is a touch or pen gesture now; a quick mouse drag is a selection or a corner drag, not a page turn. In portrait, the edge by the spine turns back, which the old corner boxes never reached.

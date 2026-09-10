@@ -68,7 +68,7 @@ export const options: Readonly<Record<keyof FlipSetting, Moved<keyof BookOptions
   showPageCorners: { to: "hoverCorners" },
   disableFlipByClick: {
     to: "click",
-    note: 'disableFlipByClick: true is click: "corners". "off" turns clicks off entirely.',
+    note: 'The default is now click: "edges": a strip along each page\'s outer edge, wider than the old corner boxes, where a corner also lifts and a drag starts. disableFlipByClick: false (the old default) is click: "anywhere"; "off" turns clicks off entirely.',
   },
 };
 

@@ -31,6 +31,15 @@ closed by design.
 - `[settled]` No compatibility shim for the old API. A migration guide covers renames.
 - `[settled]` Contact the original author for an npm deprecation notice after 1.0 (Ben's
   call and message, not an agent's).
+- `[settled]` 2026-09-10: **Hover, click and drag share one zone, and it is the page's outer
+  edge.** The original lifted a corner on hover but clicked and dragged from anywhere, so the cue
+  and the action disagreed. `click: "edges"` (the default) makes the strip along each visible
+  page's outer edge the only place a corner lifts, a click turns or a drag starts; the nearer
+  corner lifts and stays lifted until the pointer leaves the edge or reaches the other corner.
+  `"anywhere"` keeps the original's tap-anywhere, with the hover cue widened to the page to
+  match. The middle of a page belongs to the browser: text selects, links click, and a swipe is
+  a touch/pen gesture so a quick mouse selection never turns a page. A deliberate departure
+  from the original's default, recorded in the migration guide.
 
 ### Docs (settled 2026-09-01)
 
@@ -106,7 +115,7 @@ a test and a docs page.
 - Pointer Events, `touch-action`, passive listeners; no scroll jump on flip (react #57, #58).
 - Reactive options and dynamic pages without remounting (react #24, #40, #2).
 - SSR-safe: nothing touches `window` at import (react #20, #46).
-- Fine-grained flip triggers: corners only, disable swipe, click-through inside pages
+- Fine-grained flip triggers: edges only, disable swipe, click-through inside pages
   (StPageFlip #25, #10, #53, #29; react #30, #48).
 - `destroy()` stops the render loop and restores the DOM (StPageFlip #71).
 - Keyboard navigation, ARIA, `prefers-reduced-motion`.

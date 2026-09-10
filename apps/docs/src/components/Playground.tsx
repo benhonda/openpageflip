@@ -65,7 +65,7 @@ const INITIAL: Settings = {
   easing: "linear",
   shadows: true,
   shadowOpacity: 1,
-  click: ClickMode.anywhere,
+  click: ClickMode.edges,
   drag: true,
   swipe: true,
   swipeDistance: 30,
@@ -277,7 +277,7 @@ export default function Playground(): ReactElement {
                 With "Leave form controls alone" on, this button never starts a flip.
               </p>
             ) : (
-              <p>Drag a corner, click, or swipe.</p>
+              <p>Grab the outer edge and pull, click it, or swipe.</p>
             )}
           </Page>
         ))}

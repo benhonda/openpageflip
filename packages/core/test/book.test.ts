@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest";
+import { userEvent } from "vitest/browser";
 import { type Book, createBook, FlipState, Orientation } from "../src/index.ts";
 import "../src/styles.css";
 
@@ -36,23 +37,25 @@ function pointer(
   x: number,
   y: number,
   extra: PointerEventInit = {},
-): void {
+): PointerEvent {
   const bounds = (target.closest("#book") ?? target).getBoundingClientRect();
-  target.dispatchEvent(
-    new PointerEvent(type, {
-      clientX: bounds.left + x,
-      clientY: bounds.top + y,
-      pointerId: 1,
-      pointerType: "mouse",
-      isPrimary: true,
-      button: 0,
-      buttons: 1,
-      bubbles: true,
-      cancelable: true,
-      ...extra,
-    }),
-  );
+  const event = new PointerEvent(type, {
+    clientX: bounds.left + x,
+    clientY: bounds.top + y,
+    pointerId: 1,
+    pointerType: "mouse",
+    isPrimary: true,
+    button: 0,
+    buttons: 1,
+    bubbles: true,
+    cancelable: true,
+    ...extra,
+  });
+  target.dispatchEvent(event);
+  return event;
 }
+
+const touch: PointerEventInit = { pointerType: "touch" };
 
 let cleanup: (() => void)[] = [];
 afterEach(() => {
@@ -160,13 +163,49 @@ describe("createBook", () => {
     expect(book.state).toBe(FlipState.read);
   });
 
-  test("a quick horizontal swipe turns the page", async () => {
+  test("a quick horizontal swipe from the middle of a page turns it", async () => {
+    const { book, container } = mount(500, { width: 250, height: 350, flipDuration: 40 });
+    pointer(container, "pointerdown", 400, 100, touch);
+    pointer(container, "pointermove", 300, 100, touch);
+    pointer(container, "pointerup", 300, 100, touch);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(book.page).toBe(2);
+  });
+
+  test("the same quick drag with a mouse is not a swipe: it is left to text selection", async () => {
     const { book, container } = mount(500, { width: 250, height: 350, flipDuration: 40 });
     pointer(container, "pointerdown", 400, 100);
     pointer(container, "pointermove", 300, 100);
     pointer(container, "pointerup", 300, 100);
     await new Promise((r) => setTimeout(r, 200));
-    expect(book.page).toBe(2);
+    expect(book.page).toBe(0);
+    expect(book.state).toBe(FlipState.read);
+  });
+
+  test("a real mouse drag across the middle of a page selects its text; from the edge it folds the page", async () => {
+    const { book, pages } = mount(500, { width: 250, height: 350, flipDuration: 40 });
+    const word = (text: string, left: number, top: number): HTMLElement => {
+      const span = document.createElement("span");
+      span.textContent = text;
+      span.style.cssText = `position: absolute; left: ${left}px; top: ${top}px;`;
+      pages[1]?.append(span);
+      return span;
+    };
+    // The right page spans container x 250..500; its edge strip starts at 414.
+    const from = word("start", 60, 170);
+    const to = word("end", 140, 170);
+    await userEvent.dragAndDrop(from, to);
+    expect(document.getSelection()?.toString().length).toBeGreaterThan(0);
+    expect(book.page).toBe(0);
+    expect(book.state).toBe(FlipState.read);
+
+    document.getSelection()?.removeAllRanges();
+    const edge = word("edge", 225, 30);
+    await userEvent.dragAndDrop(edge, to);
+    expect(document.getSelection()?.toString()).toBe("");
+    await new Promise((r) => setTimeout(r, 200));
+    expect(book.page).toBe(0);
+    expect(book.state).toBe(FlipState.read);
   });
 
   test("pointercancel drops a lifted corner without turning", async () => {
@@ -226,9 +265,9 @@ describe("options that switch behaviour off or change the layout", () => {
       flipDuration: 40,
       swipe: false,
     });
-    pointer(container, "pointerdown", 400, 100);
-    pointer(container, "pointermove", 300, 100);
-    pointer(container, "pointerup", 300, 100);
+    pointer(container, "pointerdown", 400, 100, touch);
+    pointer(container, "pointermove", 300, 100, touch);
+    pointer(container, "pointerup", 300, 100, touch);
     await new Promise((r) => setTimeout(r, 120));
     expect(book.page).toBe(0);
   });

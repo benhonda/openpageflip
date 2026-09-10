@@ -18,12 +18,12 @@ The container's children are the pages. `data-density="hard"` makes a page rigid
     <p>A page-turn effect for the web</p>
   </div>
   <div class="page">
-    <h3>Drag a corner</h3>
-    <p>Pick up any corner and pull. Let go past the middle and the page turns; let go early and it settles back.</p>
+    <h3>Drag an edge</h3>
+    <p>Hover the outer edge and a corner lifts. Pick it up and pull: let go past the middle and the page turns; let go early and it settles back.</p>
   </div>
   <div class="page">
     <h3>Or just click</h3>
-    <p>A click on either half turns the page that way. On a touch screen, a swipe does the same.</p>
+    <p>Click a page's outer edge and it turns. The middle is yours: text selects, links open. On a touch screen, a swipe anywhere turns the page.</p>
   </div>
   <div class="page">
     <h3>Hard and soft</h3>

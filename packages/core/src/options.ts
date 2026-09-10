@@ -45,8 +45,18 @@ export const SizeMode = {
 } as const;
 export type SizeMode = (typeof SizeMode)[keyof typeof SizeMode];
 
-/** When a click or tap turns the page. */
-export const ClickMode = { anywhere: "anywhere", corners: "corners", off: "off" } as const;
+/**
+ * Where a page can be taken hold of. Hover, click and drag all use the same zone, so a corner
+ * lifts only where a press would act.
+ */
+export const ClickMode = {
+  /** The strip along each page's outer edge, a fifth of the page diagonal wide. */
+  edges: "edges",
+  /** The whole page. */
+  anywhere: "anywhere",
+  /** Clicks never turn the page; hover and drag still work from the edges. */
+  off: "off",
+} as const;
 export type ClickMode = (typeof ClickMode)[keyof typeof ClickMode];
 
 export type BookOptions = {
@@ -76,15 +86,15 @@ export type BookOptions = {
   readonly shadowOpacity?: number;
   /** Size the container to the book (aspect ratio and max width). @default true */
   readonly autoSize?: boolean;
-  /** @default "anywhere" */
+  /** @default "edges" */
   readonly click?: ClickMode;
   /** Let the pointer drag a corner. @default true */
   readonly drag?: boolean;
-  /** Turn the page on a quick horizontal swipe. @default true */
+  /** Turn the page on a quick horizontal touch or pen swipe, from anywhere on it. @default true */
   readonly swipe?: boolean;
   /** Minimum swipe travel in CSS pixels. @default 30 */
   readonly swipeDistance?: number;
-  /** Lift a corner when the mouse hovers over it. @default true */
+  /** Lift the nearer corner when the mouse hovers where a page can be taken hold of. @default true */
   readonly hoverCorners?: boolean;
   /**
    * Pointer events starting on an element matching this selector never start a flip.
@@ -110,7 +120,7 @@ const DEFAULTS: Omit<ResolvedOptions, "width" | "height"> = {
   shadows: true,
   shadowOpacity: 1,
   autoSize: true,
-  click: ClickMode.anywhere,
+  click: ClickMode.edges,
   drag: true,
   swipe: true,
   swipeDistance: 30,

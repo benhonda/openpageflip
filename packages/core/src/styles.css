@@ -9,10 +9,9 @@
   display: block;
   box-sizing: border-box;
   perspective: 2000px;
-  /* Vertical page scroll stays native; horizontal drags belong to the book. */
+  /* Vertical page scroll stays native; horizontal drags belong to the book. Text stays selectable:
+     a press that takes hold of a page cancels the browser's own selection itself (see input.ts). */
   touch-action: pan-y;
-  user-select: none;
-  -webkit-user-select: none;
 }
 
 /* Box sizing is left to the page's own CSS: a bordered page grows past its nominal size, as in the original. */

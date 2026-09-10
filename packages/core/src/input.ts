@@ -40,8 +40,9 @@ export function attachInput(
     } catch {
       // A synthetic event has no active pointer to capture; nothing is lost.
     }
-    controller.pointerDown(start);
-    if (event.pointerType === "mouse") event.preventDefault();
+    // A press that takes hold of a page is ours: no text selection or image drag under it. One
+    // that does not is left to the browser, so the middle of a page selects and scrolls as usual.
+    if (controller.pointerDown(start)) event.preventDefault();
   };
 
   const onMove = (event: PointerEvent): void => {
@@ -60,8 +61,10 @@ export function attachInput(
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const quick = event.timeStamp - startedAt < SWIPE_TIMEOUT;
+    // A swipe is a finger or pen gesture. A quick mouse drag is selecting text or dragging a corner.
     if (
       options.swipe &&
+      event.pointerType !== "mouse" &&
       quick &&
       Math.abs(dx) > options.swipeDistance &&
       Math.abs(dy) < options.swipeDistance * 2
