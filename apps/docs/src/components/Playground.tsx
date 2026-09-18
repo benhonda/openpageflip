@@ -67,7 +67,7 @@ const INITIAL: Settings = {
   flipDuration: 1000,
   easing: "linear",
   shadows: true,
-  shadowOpacity: 1,
+  shadowOpacity: 0.35,
   click: ClickMode.edges,
   drag: true,
   swipe: true,
@@ -377,7 +377,7 @@ export default function Playground(): ReactElement {
             label="Shadow opacity"
             min={0}
             max={1}
-            step={0.1}
+            step={0.05}
             value={settings.shadowOpacity}
             onChange={(v) => set("shadowOpacity", v)}
           />

@@ -41,7 +41,10 @@ export const options: Readonly<Record<keyof FlipSetting, Moved<keyof BookOptions
   startPage: { to: "startPage" },
   flippingTime: { to: "flipDuration" },
   drawShadow: { to: "shadows" },
-  maxShadowOpacity: { to: "shadowOpacity" },
+  maxShadowOpacity: {
+    to: "shadowOpacity",
+    note: "The default is 0.35, not 1, and the turning page has a hairline edge (the --opf-page-edge CSS variable). shadowOpacity: 1 with --opf-page-edge: transparent is the original's look.",
+  },
   showCover: { to: "cover" },
   usePortrait: {
     to: "layout",

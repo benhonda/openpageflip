@@ -42,12 +42,16 @@ const CLASS = {
   /** The binding, on the container: `opf-book--left`, `--right`, `--top` or `--bottom`. */
   bound: (binding: Binding) => `opf-book--${binding}`,
   flat: "opf-page--flat",
+  /** The page in the air: furled, dragged or flipping. The stylesheet draws its edge. */
+  turning: "opf-page--turning",
   soft: "opf-page--soft",
   hard: "opf-page--hard",
   shadow: "opf-shadow",
 } as const;
 
 type Side = "left" | "right";
+/** A page off the flat: the one `turning`, or the one `bottom` it uncovers. Names its `Z` entry. */
+type Layer = "flipping" | "bottom";
 
 /**
  * The inline properties this renderer owns on a page element. Every draw sets all of them
@@ -179,6 +183,7 @@ export class DomRenderer {
         this.hidden.delete(index);
       } else if (!this.hidden.has(index)) {
         applyPageStyle(page.element, { display: "none" });
+        page.element.classList.remove(CLASS.turning);
         this.hidden.add(index);
       }
     }
@@ -188,14 +193,14 @@ export class DomRenderer {
 
     if (frame.orientation !== Orientation.portrait && frame.left !== null) {
       if (flip !== null && flip.direction === FlipDirection.back && flippingHard) {
-        this.drawHard(frame.left, "left", 180 + flip.hardAngle, Z.flipping, rect);
+        this.drawHard(frame.left, "left", 180 + flip.hardAngle, "flipping", rect);
       } else {
         this.drawFlat(frame.left, "left", rect);
       }
     }
     if (frame.right !== null) {
       if (flip !== null && flip.direction === FlipDirection.forward && flippingHard) {
-        this.drawHard(frame.right, "right", 180 + flip.hardAngle, Z.flipping, rect);
+        this.drawHard(frame.right, "right", 180 + flip.hardAngle, "flipping", rect);
       } else {
         this.drawFlat(frame.right, "right", rect);
       }
@@ -215,7 +220,7 @@ export class DomRenderer {
     if (flip.bottom !== null) {
       const bottomSide: Side = flip.direction === FlipDirection.back ? "left" : "right";
       if (flippingHard) {
-        this.drawHard(flip.bottom, bottomSide, 0, Z.bottom, rect);
+        this.drawHard(flip.bottom, bottomSide, 0, "bottom", rect);
       } else {
         this.drawSoft(
           flip.bottom,
@@ -224,7 +229,7 @@ export class DomRenderer {
           flip.fold.bottomPagePosition,
           0,
           flip.direction,
-          Z.bottom,
+          "bottom",
           rect,
         );
       }
@@ -236,7 +241,7 @@ export class DomRenderer {
         : "right";
     if (flippingHard) {
       if (!isPageOnShow) {
-        this.drawHard(flip.flipping, flippingSide, flip.hardAngle, Z.flipping, rect);
+        this.drawHard(flip.flipping, flippingSide, flip.hardAngle, "flipping", rect);
       }
     } else {
       this.drawSoft(
@@ -247,7 +252,7 @@ export class DomRenderer {
         flip.fold.activeCorner,
         flip.fold.angle,
         flip.direction,
-        Z.flipping,
+        "flipping",
         rect,
         liftsFromItself,
       );
@@ -280,8 +285,10 @@ export class DomRenderer {
     const el = asClone ? this.cloneOf(page.element) : page.element;
     // Re-asserted on every draw: a framework may have rewritten the class attribute since.
     el.classList.add(CLASS.page);
-    el.classList.toggle(CLASS.hard, page.drawingDensity === PageDensity.hard);
-    el.classList.toggle(CLASS.soft, page.drawingDensity === PageDensity.soft);
+    // What the page is, not how this turn draws it: a soft page beside a hard one swings as a
+    // board for the turn, and a class that followed it there would blink the page's own styling.
+    el.classList.toggle(CLASS.hard, page.density === PageDensity.hard);
+    el.classList.toggle(CLASS.soft, page.density === PageDensity.soft);
     // The side a page sits on as the reader sees it: a right-bound book's "left" page is on the
     // right, a top-bound book's on top.
     el.classList.toggle(CLASS.side(this.axes.side("left")), side === "left");
@@ -350,6 +357,7 @@ export class DomRenderer {
     const el = this.element(index, side);
     if (el === null) return;
     el.classList.add(CLASS.flat);
+    el.classList.remove(CLASS.turning);
     const at = this.placement(
       { x: side === "right" ? rect.left + rect.pageWidth : rect.left, y: rect.top },
       { x: 0, y: 0 },
@@ -372,13 +380,14 @@ export class DomRenderer {
     position: Point,
     angle: number,
     direction: FlipDirection,
-    zIndex: number,
+    layer: Layer,
     rect: BookRect,
     asClone = false,
   ): void {
     const el = this.element(index, side, asClone);
     if (el === null) return;
     el.classList.remove(CLASS.flat);
+    el.classList.toggle(CLASS.turning, layer === "flipping");
     const at = this.placement(
       pageToContainer(position, rect, direction),
       { x: 0, y: 0 },
@@ -396,7 +405,7 @@ export class DomRenderer {
     applyPageStyle(el, {
       position: "absolute",
       display: "block",
-      zIndex: String(zIndex),
+      zIndex: String(Z[layer]),
       left: "0",
       top: "0",
       ...this.pageSize(rect),
@@ -406,10 +415,11 @@ export class DomRenderer {
     });
   }
 
-  private drawHard(index: number, side: Side, angle: number, zIndex: number, rect: BookRect): void {
+  private drawHard(index: number, side: Side, angle: number, layer: Layer, rect: BookRect): void {
     const el = this.element(index, side);
     if (el === null) return;
     el.classList.remove(CLASS.flat);
+    el.classList.toggle(CLASS.turning, layer === "flipping");
     const spine = rect.left + rect.width / 2;
     // A page turns about its spine edge: the left page's right edge, the right page's left edge.
     const at = this.placement(
@@ -420,7 +430,7 @@ export class DomRenderer {
     applyPageStyle(el, {
       position: "absolute",
       display: "block",
-      zIndex: String(zIndex),
+      zIndex: String(Z[layer]),
       left: "0",
       top: "0",
       ...this.pageSize(rect),

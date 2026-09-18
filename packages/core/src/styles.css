@@ -2,7 +2,8 @@
  * @openpageflip/core stylesheet. Import it once: `import "@openpageflip/core/styles.css"`.
  * Pages are positioned by the library with inline styles; these rules give them their 3D
  * stage and their resting state. Style page faces through `.opf-page--hard`, `--soft`,
- * `--left`, `--right` and `--flat`.
+ * `--left`, `--right`, `--flat` and `--turning`. `--hard` and `--soft` say what a page is and
+ * never change during a turn; `--flat` and `--turning` say what it is doing right now.
  */
 .opf-book {
   position: relative;
@@ -25,6 +26,14 @@
   display: none;
   position: absolute;
   transform-style: preserve-3d;
+}
+
+/* The edge of the page in the air, so white paper reads over white paper whatever the shadows are
+   set to. An outline inside the box: it costs no layout and the fold's clip trims it to the paper's
+   real edges. Recolour it with `--opf-page-edge`; `transparent` removes it. */
+.opf-page--turning {
+  outline: 1px solid var(--opf-page-edge, rgb(0 0 0 / 0.2));
+  outline-offset: -1px;
 }
 
 .opf-shadow {

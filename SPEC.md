@@ -115,6 +115,13 @@ closed by design.
 
 ### Docs (settled 2026-09-01)
 
+- `[settled]` 2026-09-18: **`opf-page--hard` and `--soft` are what a page is, not how a turn
+  draws it.** A soft page backing a hard one is drawn as a board for the turn (`drawingDensity`),
+  and the original moved the class with it, so page styling hung on `--soft` blinked off whenever
+  a cover moved. It caught the first real book built on the library (the landing page's, and the
+  design tool's prototype before it), both following our own stylesheet's advice. The class now
+  follows `density` and never changes during a turn; `--flat` and `--turning` are the classes for
+  what a page is doing. `packages/core/test/book.test.ts` holds it.
 - `[settled]` **The docs site lives in this repo, `apps/docs`** (Astro Starlight), deployed by
   Vercel from `main` (see the hosting assumption under Toolchain). It is also the demo: every
   page runs the library live.
@@ -242,6 +249,12 @@ this library. These are the places where it was wrong and we did not copy it:
   by travel so the corner still lands where the original's does.
 - Hovering an edge furls the whole edge, and stays furled anywhere along it. The original lifted
   the nearer corner and let it follow the pointer. Hover is not compared by the parity suite.
+- Shadows default to `shadowOpacity: 0.35` and the turning page has a hairline edge
+  (`.opf-page--turning` in `packages/core/src/styles.css`, coloured by `--opf-page-edge`). The
+  original's full-strength shadows are a black bar on light paper, and once they are softened a
+  white page over a white page loses its free edge, which no shadow ever marked. This is a look,
+  not geometry: the parity suite pins ours to the original's look (`mountOurs` in
+  `packages/core/test/visual/harness.ts`).
 - `flipPrev` aims at the book's left edge, not the container's (StPageFlip #29 / PR #30).
 - Hard pages and hard shadows are placed from the book rect, so they are right when the book is
   not flush with its container's top-left.

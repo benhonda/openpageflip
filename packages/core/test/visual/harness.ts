@@ -98,7 +98,15 @@ export function mountOurs(
   const stage = makeStage(stageWidth);
   const container = stage.firstElementChild as HTMLElement;
   container.append(...pages);
-  const book = createBook(container, { width: PAGE.width, height: PAGE.height, ...options });
+  // The oracle's look, not this library's defaults: its shadows run at full strength (as
+  // `mountOriginal` sets them) and it draws no edge on the turning page.
+  container.style.setProperty("--opf-page-edge", "transparent");
+  const book = createBook(container, {
+    width: PAGE.width,
+    height: PAGE.height,
+    shadowOpacity: 1,
+    ...options,
+  });
   return { stage, container, book };
 }
 

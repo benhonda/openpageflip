@@ -178,6 +178,26 @@ describe("createBook", () => {
     expect(pages.every((p) => p.style.background === "pink")).toBe(true);
   });
 
+  test("only the page in the air has an edge drawn, until it lands, and the host can recolour it", async () => {
+    const { book, container, pages } = mount(500, { width: 250, height: 350, flipDuration: 40 });
+    const edged = () =>
+      pages.flatMap((p, i) => (getComputedStyle(p).outlineStyle === "none" ? [] : [i]));
+    expect(edged()).toEqual([]);
+
+    pointer(container, "pointerdown", 470, 40);
+    pointer(container, "pointermove", 330, 120);
+    // The third page is the back of the one being turned; the fourth, uncovered under it, has no edge.
+    expect(edged()).toEqual([2]);
+    expect(getComputedStyle(pages[2] as HTMLElement).outlineOffset).toBe("-1px");
+    container.style.setProperty("--opf-page-edge", "rgb(255, 0, 0)");
+    expect(getComputedStyle(pages[2] as HTMLElement).outlineColor).toBe("rgb(255, 0, 0)");
+
+    pointer(container, "pointerup", 330, 120);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(book.state).toBe(FlipState.read);
+    expect(edged()).toEqual([]);
+  });
+
   test("setPages swaps the pages and keeps the current page in range", () => {
     const { book, container, pages } = mount();
     book.turnTo(4);
@@ -201,6 +221,41 @@ describe("createBook", () => {
     expect(await book.flipPrev("bottom")).toBe(true);
     expect(book.page).toBe(0);
     expect(await book.flipPrev()).toBe(false);
+  });
+
+  test("a page's hard or soft class says what it is, all the way through a turn", async () => {
+    // Page 1 is soft paper on the back of the hard cover, so closing the book swings it as a
+    // board. Its class must not follow it there: page styling hangs off that class.
+    const { book, pages } = mount(500, {
+      width: 250,
+      height: 350,
+      cover: true,
+      startPage: 1,
+      flipDuration: 200,
+    });
+    const [cover, inside] = pages;
+    if (!cover || !inside) throw new Error("the stage lost its pages");
+    expect(inside.classList.contains("opf-page--soft")).toBe(true);
+
+    let drawn = 0;
+    let swungAsBoard = false;
+    const wrong: string[] = [];
+    book.on("flipProgress", () => {
+      drawn++;
+      swungAsBoard ||= inside.style.transform.includes("rotateY");
+      if (
+        !inside.classList.contains("opf-page--soft") ||
+        inside.classList.contains("opf-page--hard")
+      )
+        wrong.push(`inside: ${inside.className}`);
+      if (cover.classList.contains("opf-page--soft")) wrong.push(`cover: ${cover.className}`);
+    });
+    expect(await book.flipPrev()).toBe(true);
+
+    expect(drawn).toBeGreaterThan(1);
+    expect(swungAsBoard).toBe(true);
+    expect(wrong).toEqual([]);
+    expect(cover.classList.contains("opf-page--hard")).toBe(true);
   });
 });
 

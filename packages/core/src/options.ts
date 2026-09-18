@@ -101,7 +101,7 @@ export type BookOptions = {
   readonly easing?: (t: number) => number;
   /** @default true */
   readonly shadows?: boolean;
-  /** 0 hides shadows, 1 is full strength. @default 1 */
+  /** 0 hides shadows, 1 is full strength (the original's look). @default 0.35 */
   readonly shadowOpacity?: number;
   /** Size the container to the book (aspect ratio and max width). @default true */
   readonly autoSize?: boolean;
@@ -138,7 +138,7 @@ const DEFAULTS: Omit<ResolvedOptions, "width" | "height"> = {
   flipDuration: 1000,
   easing: (t) => t,
   shadows: true,
-  shadowOpacity: 1,
+  shadowOpacity: 0.35,
   autoSize: true,
   click: ClickMode.edges,
   drag: true,
