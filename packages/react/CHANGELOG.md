@@ -1,5 +1,13 @@
 # @openpageflip/react
 
+## 0.4.1
+
+### Patch Changes
+
+- [`a0fe481`](https://github.com/benhonda/openpageflip/commit/a0fe4811d9add3b3991b57fb384801a03fd997fc) Thanks [@benhonda](https://github.com/benhonda)! - `@openpageflip/core` and `@openpageflip/react` now share one version number and always release together, so matching versions are the ones built and tested against each other. No code changed in this release; react jumps from 0.2.0 to meet core.
+- Updated dependencies [[`a0fe481`](https://github.com/benhonda/openpageflip/commit/a0fe4811d9add3b3991b57fb384801a03fd997fc)]:
+  - @openpageflip/core@0.4.1
+
 ## 0.2.0
 
 ### Minor Changes
