@@ -1,5 +1,23 @@
 # @openpageflip/core
 
+## 0.4.0
+
+### Minor Changes
+
+- [`8669c10`](https://github.com/benhonda/openpageflip/commit/8669c10759936165688384538fc834d8abfd49c2) Thanks [@benhonda](https://github.com/benhonda)! - Four bindings, and an edge that furls. `binding: "right"` is a right-to-left book: the spine on the right, the cover alone on the left, a swipe to the right reads on, and your pages stay in reading order. `binding: "top"` binds along the top edge, so pages lift from the bottom and turn up: a notepad with `layout: "single"`, a wall calendar with a spread. `"bottom"` is that upside down. Each is the left-bound book seen from another side; the fold geometry and the controller never see the binding, layout, pointer input and the renderer map at their edges, and a test holds each bound book to its left-bound twin pixel for pixel. The container gets `opf-book--<binding>`, top- and bottom-bound ones `touch-action: pan-x` from the stylesheet, and pages get `opf-page--top` and `--bottom` when they are stacked. `layout: "auto"` now reads "a spread when two pages fit across the spine", which for a left-bound book is what it was; a top- or bottom-bound book that sizes itself is always two pages tall, so it is a spread unless `layout` says `single`. Switching binding at a breakpoint is the host's call, and the docs show it with a media query.
+  
+  Hovering a page's edge now furls the whole edge, the same cue on every binding, instead of lifting the nearer corner; the option is `hover` (was `hoverCorners`). A drag moves the fold by the pointer's travel from where it took hold, so pulling straight in from anywhere on the edge deepens the furl and pulling from a corner folds across, and a press on a furled edge carries on from it. A click on a furled edge flips on from the furl.
+
+- [`d43999c`](https://github.com/benhonda/openpageflip/commit/d43999cfd04135a494da8448850bf0e7e56f78aa) Thanks [@benhonda](https://github.com/benhonda)! - A `flipProgress` event (`onFlipProgress` in React), for keeping something of your own in step with a turning page, like a shadow under a book whose cover is closing. It fires for every frame the book draws of a turn, whether that turn is animated, dragged, or a hovered edge furling, with the spread it started `from`, the spread it leads `to`, the `direction`, and a `progress` from 0 to 1. A turn always ends on exactly 0 (dropped back, or cut short by a resize, another turn, or `destroy`) or 1 (landed), so a listener never has to guess the destination or copy the book's timing. `from` is the spread on show, which for `flipTo` is the one the reader sees and not the one the book jumped beside. It runs every frame, so write it to a style, not to state; the new shadow example in the docs does exactly that.
+  
+  A hard page's shadow no longer lands on the bare stage when the cover closes, or when the book turns onto its lone last page. It was already skipped on the empty side a cover opens onto; now the side a cover lifts away from gets the same check. For anyone reading frames: `FlipFrame.bottom` is now `null` when a turn reveals nothing, where it used to repeat the flipping page.
+
+### Patch Changes
+
+- [`8692021`](https://github.com/benhonda/openpageflip/commit/86920216fba720c1b6f109135734a946fd8ecff8) Thanks [@benhonda](https://github.com/benhonda)! - Two things for a single-page book. The edge by the spine, the one that turns back, now shows its cue: the page it turns lies in the hidden half, where a furl of its far edge showed nothing, so the previous page peeks in over the spine instead, a strip under the pointer. Let go of, a peek always goes back, however far past the spine the geometry says it is; a press takes it in hand as an ordinary turn that carries on from it. And a hard cover no longer vanishes when its edge is hovered, clicked or dragged: it was drawn twice, the second time as the far face of a spread's sheet, face down. It lifts and swings open as it does in the original, held to it by a new parity scenario.
+
+- [`453b3b6`](https://github.com/benhonda/openpageflip/commit/453b3b6a84ec1b64d190609b6385c29c022f7a4f) Thanks [@benhonda](https://github.com/benhonda)! - A book you've scaled still finds its edges. With a `transform: scale()` or a CSS `zoom` on the book or anything around it, presses and hovers used to land somewhere else on the page (at 2x, twice as far from the corner), so the edges wouldn't furl or drag. The pointer is now brought back into the book's own pixels first, for an even or an uneven scale. A border on the book's container is accounted for too, where a press used to land off by the border's width. Rotation and skew still aren't undone. The new hover zoom example in the docs is built on this.
+
 ## 0.3.0
 
 ### Minor Changes
