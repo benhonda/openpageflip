@@ -1,5 +1,5 @@
 import { browserClock, type Clock } from "./animation.ts";
-import { FlipController, type Frame } from "./controller.ts";
+import { FlipController, type FlipProgress, type Frame } from "./controller.ts";
 import { createEmitter, type Emitter } from "./events.ts";
 import { attachInput } from "./input.ts";
 import { type BookRect, computeLayout, type LayoutResult } from "./layout.ts";
@@ -21,6 +21,13 @@ export type BookEvents = {
   update: { readonly page: number; readonly orientation: Orientation };
   /** A different spread is showing. `page` is the first page of it. */
   flip: { readonly page: number };
+  /**
+   * A page moved: fires as each frame of a turn is drawn, whether the turn is animated, dragged
+   * or a hovered edge furling, and once more with `progress` 0 when a turn ends without landing.
+   * For anything that should move in step with the page, like a shadow under the book; write it
+   * to a style rather than to state.
+   */
+  flipProgress: FlipProgress;
   changeState: { readonly state: FlipState };
   changeOrientation: { readonly orientation: Orientation };
 };
@@ -112,6 +119,7 @@ export function createBook(container: HTMLElement, userOptions: CreateBookOption
       onFrame: (frame: Frame) => renderer.render(frame),
       onPage: (page) => emitter.emit("flip", { page }),
       onState: (state) => emitter.emit("changeState", { state }),
+      onProgress: (progress) => emitter.emit("flipProgress", progress),
     },
     pages,
     measure(),

@@ -26,6 +26,9 @@ export type FlipBookEventProps = {
   [K in keyof BookEvents as `on${Capitalize<K>}`]?: (event: BookEvents[K]) => void;
 };
 
+/** One handler per core event. No key is optional, so a new core event fails the build here until it is wired. */
+type Handlers = { [K in keyof BookEvents]: ((event: BookEvents[K]) => void) | undefined };
+
 export type FlipBookProps = Omit<BookOptions, "pages"> &
   FlipBookEventProps & {
     /** The book's API, available from the moment the component mounts. */
@@ -73,6 +76,7 @@ export function FlipBook({
   onInit,
   onUpdate,
   onFlip,
+  onFlipProgress,
   onChangeState,
   onChangeOrientation,
   ...options
@@ -82,23 +86,17 @@ export function FlipBook({
   const pagesRef = useRef<HTMLElement[]>([]);
 
   // Callbacks and the easing function are read live, so new closures each render do not rebuild the book.
-  const latest = useRef({
-    onInit,
-    onUpdate,
-    onFlip,
-    onChangeState,
-    onChangeOrientation,
-    easing: options.easing,
-  });
+  const handlers: Handlers = {
+    init: onInit,
+    update: onUpdate,
+    flip: onFlip,
+    flipProgress: onFlipProgress,
+    changeState: onChangeState,
+    changeOrientation: onChangeOrientation,
+  };
+  const latest = useRef({ handlers, easing: options.easing });
   useLayoutEffect(() => {
-    latest.current = {
-      onInit,
-      onUpdate,
-      onFlip,
-      onChangeState,
-      onChangeOrientation,
-      easing: options.easing,
-    };
+    latest.current = { handlers, easing: options.easing };
   });
 
   // Everything else about the book is fixed at creation, so a change means a new book.
@@ -121,11 +119,10 @@ export function FlipBook({
       // Keep the page a previous book was on when only settings changed.
       startPage: Math.min(bookRef.current?.page ?? initialPage ?? 0, pages.length - 1),
     });
-    book.on("init", (e) => latest.current.onInit?.(e));
-    book.on("update", (e) => latest.current.onUpdate?.(e));
-    book.on("flip", (e) => latest.current.onFlip?.(e));
-    book.on("changeState", (e) => latest.current.onChangeState?.(e));
-    book.on("changeOrientation", (e) => latest.current.onChangeOrientation?.(e));
+    const listen = <K extends keyof BookEvents>(name: K) =>
+      book.on(name, (e) => latest.current.handlers[name]?.(e));
+    // `Object.keys` forgets the key type; `handlers` is a literal with exactly these keys.
+    for (const name of Object.keys(latest.current.handlers) as (keyof BookEvents)[]) listen(name);
     bookRef.current = book;
     return () => {
       book.destroy();

@@ -201,8 +201,8 @@ export class DomRenderer {
     const liftsFromItself = !flippingHard && flip.flipping === frame.right;
     if (!liftsFromItself) this.dropClone();
 
-    const bottomSide: Side = flip.direction === FlipDirection.back ? "left" : "right";
-    if (!(frame.orientation === Orientation.portrait && flip.direction === FlipDirection.back)) {
+    if (flip.bottom !== null) {
+      const bottomSide: Side = flip.direction === FlipDirection.back ? "left" : "right";
       if (flippingHard) {
         this.drawHard(flip.bottom, bottomSide, 0, Z.bottom, rect);
       } else {
@@ -243,11 +243,14 @@ export class DomRenderer {
       this.hideShadows();
     } else if (flippingHard) {
       this.hideSoftShadows();
-      // A hard page's shadow falls on the page it lands on. A cover opens onto the empty side of
-      // the stage, and the lone last page closes onto it, so there the shadow has nothing to fall
-      // on and is skipped. The original painted it on the bare background.
+      // A hard page's shadow needs a page to fall on, and either side can be bare: a cover opens
+      // onto the empty side of the stage and closes away from it, and so does the lone last page.
+      // The original painted the shadow on the bare background.
       const landing = flip.direction === FlipDirection.forward ? frame.left : frame.right;
-      this.drawHardShadows(flip.shadow, rect, landing !== null);
+      this.drawHardShadows(flip.shadow, rect, {
+        landing: landing !== null,
+        lifting: flip.bottom !== null,
+      });
     } else {
       this.hideHardShadows();
       this.drawSoftShadows(flip.shadow, flip.fold.rect, rect);
@@ -467,10 +470,14 @@ export class DomRenderer {
   /**
    * Two gradients at the spine. Until the page passes the spine, the inner one lies on the
    * landing side and darkens as the page comes down, and the outer one lies under the lifting
-   * page; past the spine they trade places. `landingHasPage` is false when the landing side is
-   * empty, and the gradient that would sit there stays hidden.
+   * page; past the spine they trade places. `hasPage` says which sides have a page to receive a
+   * shadow; the gradient that would sit on a bare side stays hidden.
    */
-  private drawHardShadows(shadow: ShadowData, rect: BookRect, landingHasPage: boolean): void {
+  private drawHardShadows(
+    shadow: ShadowData,
+    rect: BookRect,
+    hasPage: { readonly landing: boolean; readonly lifting: boolean },
+  ): void {
     const progress = shadow.progress > 100 ? 200 - shadow.progress : shadow.progress;
     const size = Math.min(rect.pageWidth, ((100 - progress) * (2.5 * rect.pageWidth)) / 100 + 20);
     const spine = rect.left + rect.width / 2;
@@ -478,8 +485,8 @@ export class DomRenderer {
       (shadow.direction === FlipDirection.forward && shadow.progress > 100) ||
       (shadow.direction === FlipDirection.back && shadow.progress <= 100);
     const pastSpine = shadow.progress > 100;
-    const showInner = landingHasPage || pastSpine;
-    const showOuter = landingHasPage || !pastSpine;
+    const showInner = pastSpine ? hasPage.lifting : hasPage.landing;
+    const showOuter = pastSpine ? hasPage.landing : hasPage.lifting;
     const box = this.axes.size({ width: size, height: rect.height });
     const at = this.placement({ x: spine, y: rect.top }, { x: 0, y: 0 }, size);
     const common = `display: block; width: ${box.width}px; height: ${box.height}px; left: ${at.translate.x}px; top: ${at.translate.y}px; transform-origin: ${at.origin.x}px ${at.origin.y}px;`;

@@ -9,11 +9,12 @@
 import Controlled from "../examples/react/Controlled.tsx";
 import Quickstart from "../examples/react/Quickstart.tsx";
 import Responsive from "../examples/react/Responsive.tsx";
+import Shadow from "../examples/react/Shadow.tsx";
 import { isTextTwin } from "../site.ts";
 import Example from "./Example.astro";
 
 interface Props {
-  name: "Controlled" | "Quickstart" | "Responsive";
+  name: "Controlled" | "Quickstart" | "Responsive" | "Shadow";
 }
 
 const { name } = Astro.props;
@@ -32,4 +33,5 @@ if (code === undefined) throw new Error(`No React example named "${name}" in src
   {live && name === "Controlled" && <Controlled client:load />}
   {live && name === "Quickstart" && <Quickstart client:load />}
   {live && name === "Responsive" && <Responsive client:load />}
+  {live && name === "Shadow" && <Shadow client:load />}
 </Example>

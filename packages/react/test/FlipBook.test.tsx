@@ -1,5 +1,5 @@
 import "@openpageflip/core/styles.css";
-import { type Book, FlipState } from "@openpageflip/core";
+import { type Book, type FlipProgress, FlipState } from "@openpageflip/core";
 import { createRef, useState } from "react";
 import { afterEach, describe, expect, test } from "vitest";
 import { render } from "vitest-browser-react";
@@ -80,6 +80,30 @@ describe("FlipBook", () => {
     await sleep(300);
     // Page 3 lives on spread [2, 3]; the book reports a spread by its first page.
     expect(flips).toEqual([2]);
+  });
+
+  test("onFlipProgress follows a turn from its spread to the next and ends on 1", async () => {
+    const seen: FlipProgress[] = [];
+    const book = createRef<Book>();
+    const screen = await render(
+      <Stage>
+        <FlipBook
+          ref={book}
+          width={250}
+          height={350}
+          flipDuration={40}
+          onFlipProgress={(e) => seen.push(e)}
+        >
+          {["a", "b", "c", "d"].map((label) => (
+            <Page key={label}>{label}</Page>
+          ))}
+        </FlipBook>
+      </Stage>,
+    );
+    expect(await book.current?.flipNext()).toBe(true);
+    expect(seen.length).toBeGreaterThan(1);
+    expect(seen.at(-1)).toEqual({ from: 0, to: 2, direction: "forward", progress: 1 });
+    await screen.unmount();
   });
 
   test("adding a page adopts it into the same book without remounting", async () => {

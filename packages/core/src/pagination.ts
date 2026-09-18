@@ -52,27 +52,29 @@ export function staticPages(
 }
 
 /**
- * The page that lifts (its back face is what the viewer sees mid-flip) and the page revealed
- * underneath it. `null` when there is no spread in that direction.
+ * The page that lifts (its back face is what the viewer sees mid-flip), the page revealed
+ * underneath it (`null` when the turn reveals nothing: a page coming back in portrait, or a turn
+ * onto a page shown alone), and the first page of the spread the turn leads `to`. `null` when
+ * there is no spread in that direction.
  */
 export function flipPages(
   spreads: readonly Spread[],
   orientation: Orientation,
   spreadIndex: number,
   direction: FlipDirection,
-): { flipping: number; bottom: number } | null {
+): { flipping: number; bottom: number | null; to: number } | null {
   const forward = direction === FlipDirection.forward;
-  if (orientation === Orientation.portrait) {
-    const current = spreads[spreadIndex]?.[0];
-    const other = spreads[forward ? spreadIndex + 1 : spreadIndex - 1]?.[0];
-    if (current === undefined || other === undefined) return null;
-    // Portrait shows the current page lifting away or the previous page coming back.
-    return forward ? { flipping: current, bottom: other } : { flipping: other, bottom: other };
-  }
   const target = spreads[forward ? spreadIndex + 1 : spreadIndex - 1];
   if (target === undefined) return null;
-  if (target.length === 1) return { flipping: target[0], bottom: target[0] };
+  const to = target[0];
+  if (orientation === Orientation.portrait) {
+    const current = spreads[spreadIndex]?.[0];
+    if (current === undefined) return null;
+    // Portrait shows the current page lifting away or the previous page coming back.
+    return forward ? { flipping: current, bottom: to, to } : { flipping: to, bottom: null, to };
+  }
+  if (target.length === 1) return { flipping: to, bottom: null, to };
   return forward
-    ? { flipping: target[0], bottom: target[1] }
-    : { flipping: target[1], bottom: target[0] };
+    ? { flipping: target[0], bottom: target[1], to }
+    : { flipping: target[1], bottom: target[0], to };
 }

@@ -38,5 +38,10 @@ it("rebuilds the book from its controls and reports what the book does", async (
   await expect.element(screen.getByText("Page 10 of 10")).toBeVisible();
   await expect.element(screen.getByText("flip: page 9")).toBeVisible();
 
+  // An animated flip moves the progress bar, which rests on 1 once the page has landed.
+  await screen.getByRole("button", { name: "flipPrev" }).click();
+  await expect.poll(() => screen.container.querySelector("progress")?.value).toBe(1);
+  await expect.element(screen.getByText("flip: page 8")).toBeVisible();
+
   await screen.unmount();
 });

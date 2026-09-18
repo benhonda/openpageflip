@@ -324,6 +324,24 @@ describe("options that switch behaviour off or change the layout", () => {
     expect(shadows(last.container)).toEqual(["hard-inner"]);
     pointer(last.container, "pointercancel", 350, 100);
 
+    // The cover closes away from the left side and leaves it empty: the same, the other way round.
+    const closing = mount(500, { width: 250, height: 350, cover: true, startPage: 1 });
+    pointer(closing.container, "pointerdown", 30, 40);
+    pointer(closing.container, "pointermove", 180, 100);
+    expect(shadows(closing.container)).toEqual(["hard-inner"]);
+    pointer(closing.container, "pointermove", 350, 100);
+    expect(shadows(closing.container)).toEqual(["hard-outer"]);
+    pointer(closing.container, "pointercancel", 350, 100);
+
+    // And the turn onto the lone last page leaves the right side empty.
+    const ending = mount(500, { width: 250, height: 350, cover: true, startPage: 3 });
+    pointer(ending.container, "pointerdown", 470, 40);
+    pointer(ending.container, "pointermove", 330, 100);
+    expect(shadows(ending.container)).toEqual(["hard-inner"]);
+    pointer(ending.container, "pointermove", 150, 100);
+    expect(shadows(ending.container)).toEqual(["hard-outer"]);
+    pointer(ending.container, "pointercancel", 150, 100);
+
     // A hard page in the middle of the book has a page on both sides: both shadows show.
     const middle = stage(500);
     middle.pages[3]?.setAttribute("data-density", "hard");

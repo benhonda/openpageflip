@@ -55,10 +55,10 @@ type Scenario = {
 };
 
 /**
- * The original paints a hard page's shadow on the empty side of the stage when a cover opens or
- * the lone last page closes; this library does not (SPEC.md, deliberate differences). What the
- * pages themselves do on that side is compared elsewhere, over a page that is there to receive
- * the shadow: `hard-middle-back` and `hard-forward-past-spine`.
+ * The original paints a hard page's shadow on the empty side of the stage when a cover or the
+ * lone last page opens onto it or closes away from it; this library does not (SPEC.md, deliberate
+ * differences). What the pages themselves do on that side is compared elsewhere, over a page
+ * that is there to receive the shadow: `hard-middle-back` and `hard-forward-past-spine`.
  */
 const EMPTY_LEFT: Rect = { x: 0, y: 0, width: PAGE.width, height: PAGE.height };
 const EMPTY_RIGHT: Rect = { x: PAGE.width, y: 0, width: PAGE.width, height: PAGE.height };
@@ -166,6 +166,38 @@ const scenarios: Scenario[] = [
     cover: true,
     startPage: 5,
     drive: drag({ x: 30, y: 40 }, { x: 350, y: 100 }),
+    ignore: [EMPTY_RIGHT],
+  },
+  {
+    name: "cover-back-hard",
+    stage: LANDSCAPE_STAGE,
+    cover: true,
+    startPage: 1,
+    drive: drag({ x: 30, y: 40 }, { x: 180, y: 100 }),
+    ignore: [EMPTY_LEFT],
+  },
+  {
+    name: "cover-back-hard-past-spine",
+    stage: LANDSCAPE_STAGE,
+    cover: true,
+    startPage: 1,
+    drive: drag({ x: 30, y: 40 }, { x: 350, y: 100 }),
+    ignore: [EMPTY_LEFT],
+  },
+  {
+    name: "last-page-forward-hard",
+    stage: LANDSCAPE_STAGE,
+    cover: true,
+    startPage: 3,
+    drive: drag({ x: 470, y: 40 }, { x: 330, y: 100 }),
+    ignore: [EMPTY_RIGHT],
+  },
+  {
+    name: "last-page-forward-hard-past-spine",
+    stage: LANDSCAPE_STAGE,
+    cover: true,
+    startPage: 3,
+    drive: drag({ x: 470, y: 40 }, { x: 150, y: 100 }),
     ignore: [EMPTY_RIGHT],
   },
   {

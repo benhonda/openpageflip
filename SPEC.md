@@ -70,6 +70,20 @@ closed by design.
   switch that `layout` exists to turn off) and a binding-specific set of `FlipCorner` names
   (`top`/`bottom` are documented as the left and right corners of a vertically bound page).
 
+- `[settled]` 2026-09-18: **A turn reports itself every frame, as `flipProgress`.** A host that
+  moves something of its own with the page (a shadow under a book whose cover is closing) needs
+  to know where a turn is while it happens; `flip` fires after it lands and `changeState` says
+  only that something is moving. The event carries `from`, `to`, `direction` and `progress` 0..1,
+  and is read off the frame the controller just drew (`reportProgress` in
+  `packages/core/src/controller.ts`), so it covers animated flips, drags and furls alike and
+  cannot disagree with the book. Every turn ends on exactly 0 or 1: a landing is reported as 1
+  explicitly because the kernel treats the landed point as degenerate, and a turn that is
+  dropped, replaced or cut short is closed on 0. Rejected: a destination on `changeState` at
+  flip start (a drag has no destination until it is released and never enters `flipping`, and
+  the host would still have to copy our duration, which scales with the path and can be cut
+  short by a press), and the library drawing a ground shadow itself (a look, not geometry).
+  `apps/docs/src/examples/react/Shadow.tsx` is the use it was built for.
+
 ### Docs (settled 2026-09-01)
 
 - `[settled]` **The docs site lives in this repo, `apps/docs`** (Astro Starlight), deployed by
@@ -168,8 +182,8 @@ Each phase is anchored to the commit that landed it; the tests named are the pro
 3. **React wrapper.** Landed in `f0701b8`. `packages/react/src/FlipBook.tsx`; StrictMode and
    Node SSR covered by `packages/react/test/`.
 4. **Backlog features** from the list above. Landed so far: `click: "edges"` (`9056442`), the
-   four bindings including right-to-left (`binding` option, `packages/core/test/binding.test.ts`)
-   and the hover furl. Suggested order for the rest: keyboard and ARIA, then lazy images and the
+   four bindings including right-to-left (`binding` option, `packages/core/test/binding.test.ts`),
+   the hover furl, and the `flipProgress` event. Suggested order for the rest: keyboard and ARIA, then lazy images and the
    remaining click/drag option tests.
 5. **Docs, migration guide, 1.0.** Not started. Before calling the packages a replacement:
    `[open]` add Firefox and WebKit to the Vitest browser instances (everything so far is verified
@@ -201,8 +215,9 @@ this library. These are the places where it was wrong and we did not copy it:
 - Hard pages and hard shadows are placed from the book rect, so they are right when the book is
   not flush with its container's top-left.
 - A hard page's shadow is drawn only on the side that has a page to receive it. The original
-  painted it on the bare stage when a cover opened or the lone last page closed. The parity
-  scenarios for those flips leave the empty side out of the comparison.
+  painted it on the bare stage when a cover or the lone last page opened onto the empty side or
+  closed away from it. The parity scenarios for those flips leave the empty side out of the
+  comparison.
 - A page drawn hard for one flip (because its neighbour is hard) goes back to soft afterwards;
   the original left it hard.
 - `destroy()` stops the frame loop, restores every page's inline style and class, and removes

@@ -44,12 +44,28 @@ export type FlipFrame = {
   readonly direction: FlipDirection;
   readonly corner: FlipCorner;
   readonly flipping: number;
-  readonly bottom: number;
+  /** The page revealed underneath, or `null` when the turn reveals nothing. */
+  readonly bottom: number | null;
   readonly fold: Fold;
   readonly progress: number;
   /** Rotation about the spine for hard pages, in degrees. */
   readonly hardAngle: number;
   readonly shadow: ShadowData | null;
+};
+
+/** Where a turn is, between the spread it started from and the spread it leads to. */
+export type FlipProgress = {
+  /** First page of the spread on show when the turn began. */
+  readonly from: number;
+  /** First page of the spread the turn leads to. */
+  readonly to: number;
+  readonly direction: FlipDirection;
+  /**
+   * 0 with the page at rest on `from`, 1 with it landed on `to`; in between, how far across the
+   * book the page's corner has come, which for a hard page is how far round it has swung. A turn
+   * always ends on exactly 0 (dropped back, or cut short) or 1.
+   */
+  readonly progress: number;
 };
 
 /** Everything a renderer needs to draw one moment of the book. */
@@ -67,19 +83,24 @@ export type ControllerHooks = {
   readonly onFrame: (frame: Frame) => void;
   readonly onPage: (page: number) => void;
   readonly onState: (state: FlipState) => void;
+  readonly onProgress: (progress: FlipProgress) => void;
 };
 
 type Session = {
   readonly direction: FlipDirection;
   readonly corner: FlipCorner;
   readonly flipping: number;
-  readonly bottom: number;
+  readonly bottom: number | null;
+  readonly from: number;
+  readonly to: number;
   readonly pageWidth: number;
   readonly pageHeight: number;
   fold: Fold | null;
   progress: number;
   hardAngle: number;
   shadow: ShadowData | null;
+  /** The turn reached `to`. The fold cannot say so: where a page lands is a degenerate point. */
+  landed: boolean;
 };
 
 /** Pointer travel before a press counts as a drag rather than a click. */
@@ -124,6 +145,8 @@ export class FlipController {
   private dragged = false;
   /** Where the fold was when a drag took hold of it, in page space; the drag moves it from here. */
   private dragBase: Point | null = null;
+  /** What the host was last told about a turn, so each change is told once and every turn is closed. */
+  private reported: FlipProgress | null = null;
 
   private readonly options: ResolvedOptions;
   private readonly clock: Clock;
@@ -347,6 +370,7 @@ export class FlipController {
             return;
           }
           if (turn) {
+            session.landed = true;
             if (session.direction === FlipDirection.back) this.showPrev();
             else this.showNext();
           }
@@ -542,12 +566,16 @@ export class FlipController {
       corner,
       flipping: pair.flipping,
       bottom: pair.bottom,
+      // The spread on show, which `flipTo` leaves in place while it jumps beside its target.
+      from: this.left ?? this.right ?? this.currentPage,
+      to: pair.to,
       pageWidth: this.rect.pageWidth,
       pageHeight: this.rect.height,
       fold: null,
       progress: 0,
       hardAngle: 0,
       shadow: null,
+      landed: false,
     };
     return this.session;
   }
@@ -691,9 +719,44 @@ export class FlipController {
 
   private render(): void {
     this.hooks.onFrame(this.frame());
+    this.reportProgress();
+  }
+
+  /**
+   * Progress is read off what was just drawn, so it cannot disagree with the book: a fold is a
+   * turn under way, and a turn whose fold is gone without landing is back at rest.
+   */
+  private reportProgress(): void {
+    const session = this.session;
+    const now: FlipProgress | null =
+      session !== null && session.fold !== null
+        ? {
+            from: session.from,
+            to: session.to,
+            direction: session.direction,
+            progress: session.landed ? 1 : session.progress / 100,
+          }
+        : null;
+    const last = this.reported;
+    const sameTurn =
+      now !== null &&
+      last !== null &&
+      now.from === last.from &&
+      now.to === last.to &&
+      now.direction === last.direction;
+    if (sameTurn && now.progress === last.progress) return;
+    if (last !== null && !sameTurn && last.progress !== 0 && last.progress !== 1) {
+      this.reported = { ...last, progress: 0 };
+      this.hooks.onProgress(this.reported);
+    }
+    if (now === null) return;
+    this.reported = now;
+    this.hooks.onProgress(now);
   }
 
   destroy(): void {
     this.endSession();
+    // Nothing is drawn again, so a turn that was under way is closed here.
+    this.reportProgress();
   }
 }

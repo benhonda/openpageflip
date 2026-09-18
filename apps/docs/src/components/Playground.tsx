@@ -222,6 +222,8 @@ type LogEntry = { readonly id: number; readonly text: string };
 
 export default function Playground(): ReactElement {
   const book = useRef<Book>(null);
+  // flipProgress fires every frame, so it is written straight to the element, not through state.
+  const progress = useRef<HTMLProgressElement>(null);
   const [settings, setSettings] = useState(INITIAL);
   const [page, setPage] = useState(0);
   const [state, setState] = useState<FlipState>(FlipState.read);
@@ -255,6 +257,9 @@ export default function Playground(): ReactElement {
         onFlip={(e) => {
           setPage(e.page);
           record(`flip: page ${e.page}`);
+        }}
+        onFlipProgress={(e) => {
+          if (progress.current !== null) progress.current.value = e.progress;
         }}
         onChangeState={(e) => {
           setState(e.state);
@@ -294,6 +299,11 @@ export default function Playground(): ReactElement {
         <span>state: {state}</span>
         <span>orientation: {orientation}</span>
       </p>
+      {/* Outside the live region above: a value that moves every frame is not for announcing. */}
+      <label className="controls">
+        flipProgress
+        <progress ref={progress} max={1} value={0} />
+      </label>
 
       <div className="panel">
         <fieldset>

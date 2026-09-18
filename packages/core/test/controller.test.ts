@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { FlipController, type Frame, REST_NUDGE } from "../src/controller.ts";
+import { FlipController, type FlipProgress, type Frame, REST_NUDGE } from "../src/controller.ts";
 import { computeLayout } from "../src/layout.ts";
 import {
   type BookOptions,
@@ -29,6 +29,7 @@ function setup(
   const frames: Frame[] = [];
   const shown: number[] = [];
   const states: FlipState[] = [];
+  const progress: FlipProgress[] = [];
   const manual = createManualClock();
   const controller = new FlipController(
     options,
@@ -37,13 +38,14 @@ function setup(
       onFrame: (f) => frames.push(f),
       onPage: (p) => shown.push(p),
       onState: (s) => states.push(s),
+      onProgress: (p) => progress.push(p),
     },
     pages,
     computeLayout(container.w, container.h, options),
   );
   controller.showPage(options.startPage);
   const last = () => frames[frames.length - 1] as Frame;
-  return { controller, frames, shown, states, manual, last };
+  return { controller, frames, shown, states, progress, manual, last };
 }
 
 /** Run the clock until the promise settles or `limit` ms pass. */
@@ -380,7 +382,7 @@ describe("FlipController", () => {
     const controller = new FlipController(
       options,
       manual.clock,
-      { onFrame: () => {}, onPage: () => {}, onState: () => {} },
+      { onFrame: () => {}, onPage: () => {}, onState: () => {}, onProgress: () => {} },
       pages,
       computeLayout(500, 350, options),
     );
@@ -417,6 +419,97 @@ describe("FlipController", () => {
     controller.showPage(5);
     expect(last().left).toBe(5);
     expect(last().right).toBeNull();
+  });
+
+  test("progress follows an animated flip from its spread to the next and ends on exactly 1", async () => {
+    const { controller, manual, progress } = setup();
+    expect(await settle(controller.flipNext(FlipCorner.top), manual)).toBe(true);
+    expect(progress.length).toBeGreaterThan(10);
+    for (const p of progress) expect(p).toMatchObject({ from: 0, to: 2, direction: "forward" });
+    const values = progress.map((p) => p.progress);
+    expect(values[0]).toBeGreaterThan(0);
+    expect(values).toEqual([...values].sort((a, b) => a - b));
+    expect(new Set(values).size).toBe(values.length);
+    expect(values.at(-1)).toBe(1);
+  });
+
+  test("progress follows a drag both ways: dropped back it ends on exactly 0, carried over on 1", () => {
+    const { controller, manual, progress } = setup();
+    controller.pointerDown({ x: 470, y: 40 });
+    controller.pointerDrag({ x: 400, y: 100 });
+    controller.pointerDrag({ x: 300, y: 100 });
+    controller.pointerDrag({ x: 380, y: 100 });
+    const dragged = progress.map((p) => p.progress);
+    expect(dragged).toHaveLength(3);
+    expect(dragged[1]).toBeGreaterThan(dragged[0] as number);
+    expect(dragged[2]).toBeLessThan(dragged[1] as number);
+    controller.pointerUp({ x: 380, y: 100 });
+    for (let i = 0; i < 100; i++) manual.advance(16);
+    expect(progress.at(-1)).toEqual({ from: 0, to: 2, direction: "forward", progress: 0 });
+    expect(controller.page).toBe(0);
+
+    controller.pointerDown({ x: 470, y: 40 });
+    controller.pointerDrag({ x: 100, y: 90 });
+    controller.pointerUp({ x: 100, y: 90 });
+    for (let i = 0; i < 100; i++) manual.advance(16);
+    expect(progress.at(-1)).toEqual({ from: 0, to: 2, direction: "forward", progress: 1 });
+  });
+
+  test("a furled edge reports its little progress, and settling closes the turn on 0", () => {
+    const { controller, manual, progress } = setup({ startPage: 2 });
+    controller.hover({ x: 30, y: 30 });
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    expect(progress.at(-1)).toMatchObject({ from: 2, to: 0, direction: "back" });
+    expect(progress.at(-1)?.progress).toBeCloseTo(60 / 500, 6);
+    controller.hoverEnd();
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    expect(progress.at(-1)?.progress).toBe(0);
+  });
+
+  test("a click on a furled edge is the same turn carrying on: progress never drops to 0", async () => {
+    const { controller, manual, progress } = setup();
+    controller.hover({ x: 470, y: 150 });
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    controller.pointerDown({ x: 470, y: 150 });
+    controller.pointerUp({ x: 470, y: 150 });
+    for (let i = 0; i < 100; i++) manual.advance(16);
+    await Promise.resolve();
+    expect(controller.page).toBe(2);
+    expect(progress.map((p) => p.progress)).not.toContain(0);
+    expect(progress.at(-1)?.progress).toBe(1);
+  });
+
+  test("a turn replaced by another is closed on 0 before the new one reports", () => {
+    const { controller, manual, progress } = setup({ startPage: 2 });
+    controller.hover({ x: 470, y: 30 });
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    progress.length = 0;
+    void controller.flipPrev(FlipCorner.top);
+    expect(progress[0]).toEqual({ from: 2, to: 4, direction: "forward", progress: 0 });
+    expect(progress[1]).toMatchObject({ from: 2, to: 0, direction: "back" });
+  });
+
+  test("a turn cut short by a resize is closed on 0", () => {
+    const { controller, progress } = setup({ size: "stretch" });
+    controller.pointerDown({ x: 470, y: 40 });
+    controller.pointerDrag({ x: 330, y: 120 });
+    const options = resolveOptions({ width: 250, height: 350, size: "stretch" });
+    controller.setLayout(computeLayout(600, 420, options));
+    expect(progress.at(-1)?.progress).toBe(0);
+  });
+
+  test("a turn under way when the book is destroyed is closed on 0", () => {
+    const { controller, manual, progress } = setup();
+    void controller.flipNext(FlipCorner.top);
+    manual.advance(16);
+    controller.destroy();
+    expect(progress.at(-1)).toEqual({ from: 0, to: 2, direction: "forward", progress: 0 });
+  });
+
+  test("flipTo reports the spread on show as `from`, not the one it jumped beside", async () => {
+    const { controller, manual, progress } = setup({ cover: true });
+    expect(await settle(controller.flipTo(5, FlipCorner.top), manual)).toBe(true);
+    expect(progress.at(-1)).toEqual({ from: 0, to: 5, direction: "forward", progress: 1 });
   });
 
   test("changing orientation re-paginates and keeps the current spread's first page", () => {

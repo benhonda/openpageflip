@@ -6,12 +6,22 @@ sidebar:
 ---
 
 import { Code } from "@astrojs/starlight/components";
-import { PackageManagers } from "starlight-package-managers";
 import corePkg from "@openpageflip/core/package.json";
 import CoreExample from "../../../components/CoreExample.astro";
+import Install from "../../../components/Install.astro";
 import pagesHtml from "../../../examples/core/pages.html?raw";
 
-<PackageManagers pkg={corePkg.name} />
+export const cdn = `https://cdn.jsdelivr.net/npm/${corePkg.name}@${corePkg.version}`;
+
+<Install pkg={corePkg.name}>
+  No bundler? One script tag puts `createBook` on `window.OpenPageFlip`, and it works the same from there.
+
+  <Code code={`<link rel="stylesheet" href="${cdn}/dist/styles.css" />
+<script src="${cdn}"></script>
+<script>
+  const book = OpenPageFlip.createBook(document.getElementById("book"), { width: 400, height: 560 });
+</script>`} lang="html" title="index.html" />
+</Install>
 
 ## Pages are elements
 
@@ -35,13 +45,3 @@ What comes back is a [`Book`](/api/openpageflip/core/type-aliases/book/):
 - `book.destroy()` stops everything and puts your DOM back the way it was.
 
 Every option and event is in the [reference](/api/openpageflip/core/), generated from the source on every build.
-
-## Without a bundler
-
-There's also a single-file build for a script tag. It puts `createBook` on `window.OpenPageFlip` and otherwise works the same.
-
-<Code code={`<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/${corePkg.name}/dist/styles.css" />
-<script src="https://cdn.jsdelivr.net/npm/${corePkg.name}"></script>
-<script>
-  const book = OpenPageFlip.createBook(document.getElementById("book"), { width: 400, height: 560 });
-</script>`} lang="html" title="index.html" />

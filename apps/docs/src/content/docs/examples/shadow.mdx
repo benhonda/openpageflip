@@ -1,0 +1,14 @@
+---
+title: A shadow that follows the cover
+description: Keep something of your own in step with a turning page using the flipProgress event, here a shadow on the table under a book with a hard cover.
+---
+
+import ReactExample from "../../../components/ReactExample.astro";
+
+A closed book covers half the table and an open one covers all of it, so a shadow under the book has to change size while the cover swings. The `flip` event is too late for that (it fires once the page has landed), and you can't time it yourself either, because a turn can be dragged, dropped back, or cut short by a click.
+
+`flipProgress` is there for this. It fires for every frame the book draws of a turn, with the spread the turn started `from`, the one it leads `to`, and a `progress` between 0 and 1. A turn always finishes on exactly 0 or 1, so whatever you hang off it ends up where the book did. Open and close the cover here, and try dragging it halfway and letting go:
+
+<ReactExample name="Shadow" />
+
+It runs every frame, so write it to a style or a CSS variable like the example does, not to React state.
