@@ -65,10 +65,13 @@ export const options: Readonly<Record<keyof FlipSetting, Moved<keyof BookOptions
     note: "Split three ways: drag, swipe and click each have their own option.",
   },
   swipeDistance: { to: "swipeDistance" },
-  showPageCorners: { to: "hoverCorners" },
+  showPageCorners: {
+    to: "hover",
+    note: "Hovering an edge furls the whole edge now, rather than lifting a corner that follows the pointer.",
+  },
   disableFlipByClick: {
     to: "click",
-    note: 'The default is now click: "edges": a strip along each page\'s outer edge, wider than the old corner boxes, where a corner also lifts and a drag starts. disableFlipByClick: false (the old default) is click: "anywhere"; "off" turns clicks off entirely.',
+    note: 'The default is now click: "edges": a strip along each page\'s outer edge, wider than the old corner boxes, where the edge also furls and a drag starts. disableFlipByClick: false (the old default) is click: "anywhere"; "off" turns clicks off entirely.',
   },
 };
 

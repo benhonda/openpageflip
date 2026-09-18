@@ -19,7 +19,7 @@ The container's children are the pages. `data-density="hard"` makes a page rigid
   </div>
   <div class="page">
     <h3>Drag an edge</h3>
-    <p>Hover the outer edge and a corner lifts. Pick it up and pull: let go past the middle and the page turns; let go early and it settles back.</p>
+    <p>Hover the outer edge and it furls. Take hold and pull: let go past the middle and the page turns; let go early and it settles back.</p>
   </div>
   <div class="page">
     <h3>Or just click</h3>

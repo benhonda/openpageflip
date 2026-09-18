@@ -1,0 +1,19 @@
+---
+title: Notepad
+description: A book bound along its top edge, so pages turn up from the bottom, and a React book that switches to one below a breakpoint you pick.
+---
+
+import CoreExample from "../../../components/CoreExample.astro";
+import ReactExample from "../../../components/ReactExample.astro";
+
+`binding: "top"` puts the spine along the top edge. It's the same book turned a quarter, so everything you know still holds - the outer edge is where a page lifts, only now that edge is the bottom one and the page folds up over the one behind it. With `layout: "single"` you get a notepad. Leave the layout on auto and a top-bound book stacks two pages, which is how a wall calendar hangs. There's a `"bottom"` too, the same thing upside down, for the odd flip chart.
+
+One thing to know before you put one of these on a phone: a top-bound book turns on vertical drags, so it keeps them for itself and a finger on the pad won't scroll the page. Scrolling from anywhere outside the pad still works, the same trade a carousel makes with horizontal swipes.
+
+<CoreExample name="notebook" />
+
+## A book on a desk, a notepad in a hand
+
+The library doesn't pick a breakpoint for you. Honestly it's better that way - whether a book should turn into a notepad on a phone, and at what width, depends on the book, and the pieces are already there: a media query, and props that rebuild the book on the page it was showing when they change. This one becomes a notepad below 640px, so make the window narrower and watch it, or open this page on a phone.
+
+<ReactExample name="Responsive" />

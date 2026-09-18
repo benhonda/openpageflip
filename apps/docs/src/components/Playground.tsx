@@ -5,6 +5,7 @@
  */
 import "@openpageflip/core/styles.css";
 import {
+  Binding,
   type Book,
   type BookOptions,
   ClickMode,
@@ -38,6 +39,7 @@ const EASING_NAMES = Object.keys(EASINGS) as readonly Easing[];
 type Settings = {
   cover: boolean;
   layout: Layout;
+  binding: Binding;
   size: SizeMode;
   width: number;
   height: number;
@@ -49,7 +51,7 @@ type Settings = {
   drag: boolean;
   swipe: boolean;
   swipeDistance: number;
-  hoverCorners: boolean;
+  hover: boolean;
   /** true keeps the library's default selector; false lets form controls start a flip too. */
   ignoreDragOn: boolean;
 };
@@ -58,6 +60,7 @@ type Settings = {
 const INITIAL: Settings = {
   cover: true,
   layout: Layout.auto,
+  binding: Binding.left,
   size: SizeMode.stretch,
   width: 300,
   height: 420,
@@ -69,7 +72,7 @@ const INITIAL: Settings = {
   drag: true,
   swipe: true,
   swipeDistance: 30,
-  hoverCorners: true,
+  hover: true,
   ignoreDragOn: true,
 };
 
@@ -82,6 +85,7 @@ function toOptions(s: Settings): Options {
     height: s.height,
     size: s.size,
     layout: s.layout,
+    binding: s.binding,
     cover: s.cover,
     flipDuration: s.flipDuration,
     easing: EASINGS[s.easing].fn,
@@ -91,7 +95,7 @@ function toOptions(s: Settings): Options {
     drag: s.drag,
     swipe: s.swipe,
     swipeDistance: s.swipeDistance,
-    hoverCorners: s.hoverCorners,
+    hover: s.hover,
     ...(s.ignoreDragOn ? {} : { ignoreDragOn: false }),
   };
 }
@@ -328,6 +332,12 @@ export default function Playground(): ReactElement {
             onChange={(v) => set("layout", v)}
           />
           <Choice
+            label="Binding"
+            options={Object.values(Binding)}
+            value={settings.binding}
+            onChange={(v) => set("binding", v)}
+          />
+          <Choice
             label="Size"
             options={Object.values(SizeMode)}
             value={settings.size}
@@ -401,9 +411,9 @@ export default function Playground(): ReactElement {
             onChange={(v) => set("swipeDistance", v)}
           />
           <Toggle
-            label="Hover corners"
-            checked={settings.hoverCorners}
-            onChange={(v) => set("hoverCorners", v)}
+            label="Furl on hover"
+            checked={settings.hover}
+            onChange={(v) => set("hover", v)}
           />
           <Toggle
             label="Leave form controls alone"

@@ -28,6 +28,11 @@ it("rebuilds the book from its controls and reports what the book does", async (
   // The generated code carries the change.
   await expect.element(screen.getByText('layout: "single",')).toBeInTheDocument();
 
+  // A top binding reaches the book: its container is marked for the stylesheet.
+  await screen.getByLabelText("Binding").selectOptions("top");
+  await expect.poll(() => screen.container.querySelector(".opf-book--top")).not.toBeNull();
+  await expect.element(screen.getByText('binding: "top",')).toBeInTheDocument();
+
   // The API bar drives the book, and the flip shows up in the readout and the log.
   await screen.getByRole("button", { name: "turnTo last (no animation)" }).click();
   await expect.element(screen.getByText("Page 10 of 10")).toBeVisible();

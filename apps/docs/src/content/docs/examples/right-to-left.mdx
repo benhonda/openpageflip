@@ -1,0 +1,12 @@
+---
+title: Right to left
+description: A book bound on the right, for manga and any language that reads right to left, with the pages in the same order as always.
+---
+
+import CoreExample from "../../../components/CoreExample.astro";
+
+`binding: "right"` puts the spine on the right, which is all a right-to-left book is. The cover sits alone on the left, reading on turns a page from the left edge over to the right, and on touch a swipe to the right goes forward. Your pages stay in reading order, first to last, the same as for any other book - the binding decides which side of the spine each one lands on, not you.
+
+The page-side classes follow the screen, so `opf-page--left` is still the page on the left. It's just that in this book that's the later one of the pair.
+
+<CoreExample name="right-to-left" />
