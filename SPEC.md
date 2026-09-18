@@ -146,8 +146,15 @@ closed by design.
     package manifests, so it cannot name a file or package that does not exist.
   - `[settled]` 2026-09-02: the playground (`apps/docs/src/components/Playground.tsx`) is a site
     component, not an example: every option as a control, the API as buttons, an event log, and
-    the options rendered as code generated from the controls' state. The landing page keeps the
-    quick start as its demo; the playground is the second surface, for exploring settings.
+    the options rendered as code generated from the controls' state. It is the second surface,
+    for exploring settings; the landing page has its own demo (next).
+  - `[settled]` 2026-09-18: **the landing page's demo is a real thing, The Site Report**
+    (`apps/docs/src/examples/react/SiteReport.tsx`): a web-analytics report laid out as a
+    twelve-page magazine whose range switch redraws every page in place. It replaced the quick
+    start there because a book of placeholder pages shows the turn but not why you would want
+    one. It is an example like the rest (run live, tested in `apps/docs/test/`), in React because
+    the pages are state-driven. Its pages are sized in fractions of the page width, so the issue
+    is one picture at every size the book stretches to. The quick start stays on `start/core`.
 - `[settled]` **The migration guide is data, not prose**: `apps/docs/src/migration/index.ts` maps
   every key of the vendored `page-flip@2.0.7` / `react-pageflip@2.0.3` API (`upstream.ts`) to
   `keyof BookOptions`, `keyof Book`, `keyof BookEvents` and `keyof FlipBookProps`, so the type

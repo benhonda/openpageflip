@@ -1,0 +1,766 @@
+/*
+ * The Site Report's look. The paper palette is the magazine's own, so it stays the same in the
+ * site's light and dark themes. Latin subsets only: the copy is English.
+ */
+@import "@fontsource-variable/newsreader/opsz.css";
+@import "@fontsource-variable/newsreader/opsz-italic.css";
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
+
+.site-report {
+  --sr-paper: #f4efe6;
+  --sr-desk: #e9e2d4;
+  --sr-ink: #1c1a17;
+  --sr-body: #3b372f;
+  --sr-muted: #7a746a;
+  --sr-rule: #d8d0c1;
+  --sr-track: #e6dfd1;
+  --sr-accent: #d2553a;
+  --sr-good: #2f7a4f;
+  --sr-serif: "Newsreader Variable", Georgia, serif;
+  --sr-sans: "IBM Plex Sans", Helvetica, sans-serif;
+  --sr-mono-face: "IBM Plex Mono", ui-monospace, monospace;
+  /* One design pixel: a page is drawn 480 wide and scales with the sheet it is on. */
+  --u: calc(100cqw / 480);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  box-sizing: border-box;
+  padding: 28px 24px 40px;
+  border-radius: 0.5rem;
+  background: var(--sr-desk);
+  color: var(--sr-ink);
+  font-family: var(--sr-sans);
+  line-height: 1.4;
+}
+
+.site-report *,
+.site-report *::before,
+.site-report *::after {
+  box-sizing: border-box;
+}
+
+.site-report :where(h2, p, ol, fieldset) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+}
+
+.site-report :where(button) {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.site-report :is(button, .sr-stage):focus-visible {
+  outline: 2px solid var(--sr-accent);
+  outline-offset: 2px;
+}
+
+.site-report .sr-mono {
+  font-family: var(--sr-mono-face);
+}
+
+.site-report [data-good="true"] {
+  color: var(--sr-good);
+}
+
+.site-report [data-good="false"] {
+  color: var(--sr-accent);
+}
+
+@media (max-width: 799.98px) {
+  .site-report {
+    padding: 20px 14px 28px;
+  }
+}
+
+/* Toolbar */
+
+.sr-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  max-width: 1180px;
+}
+
+.sr-toolbar-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  font-family: var(--sr-serif);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.sr-toolbar-title .sr-mono {
+  color: var(--sr-muted);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.sr-toolbar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+}
+
+.site-report .sr-ranges {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--sr-ink);
+  border-radius: 999px;
+}
+
+.sr-ranges legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.site-report .sr-ranges button {
+  padding: 7px 16px;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.site-report .sr-ranges button[aria-pressed="true"] {
+  background: var(--sr-ink);
+  color: var(--sr-paper);
+}
+
+.site-report .sr-ranges button:focus-visible {
+  outline-offset: -4px;
+}
+
+.sr-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-report .sr-nav button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--sr-ink);
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.sr-nav output {
+  min-width: 64px;
+  color: var(--sr-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.sr-hint {
+  color: var(--sr-muted);
+  font-size: 12px;
+}
+
+/* The book */
+
+.sr-stage {
+  width: 100%;
+  max-width: 1180px;
+  filter: drop-shadow(0 30px 40px rgb(60 40 20 / 0.28));
+}
+
+.sr-book {
+  margin-inline: auto;
+}
+
+/*
+ * Until the book lays itself out, the pages are plain stacked blocks. Show the cover alone where
+ * the book is about to put it and hold the book's footprint, so the server-rendered page and the
+ * mounted book are the same picture. The breakpoint is the one SiteReport.tsx turns single at.
+ */
+.sr-book:not(.opf-book) {
+  max-width: 590px;
+  aspect-ratio: 3 / 4;
+}
+
+.sr-book:not(.opf-book) > :not(:first-child) {
+  display: none;
+}
+
+.sr-book:not(.opf-book) > :first-child {
+  height: 100%;
+}
+
+@media (min-width: 800px) {
+  .sr-book:not(.opf-book) {
+    max-width: 1180px;
+    aspect-ratio: 3 / 2;
+  }
+
+  .sr-book:not(.opf-book) > :first-child {
+    width: 50%;
+    margin-left: 50%;
+  }
+}
+
+.sr-page {
+  overflow: hidden;
+  outline: 1px solid rgb(28 26 23 / 0.22);
+  outline-offset: -1px;
+  background: var(--sr-paper);
+}
+
+.sr-page--cover {
+  background: var(--sr-accent);
+  color: var(--sr-paper);
+}
+
+.sr-page--back {
+  background: var(--sr-ink);
+  color: var(--sr-paper);
+}
+
+/* The crease by the spine, on the pages that bend. */
+.sr-page.opf-page--soft::after {
+  content: "";
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  width: 7%;
+  pointer-events: none;
+}
+
+.sr-page.opf-page--soft.opf-page--left::after {
+  right: 0;
+  background: linear-gradient(
+    to right,
+    rgb(28 26 23 / 0) 0%,
+    rgb(28 26 23 / 0.07) 70%,
+    rgb(28 26 23 / 0.22) 100%
+  );
+}
+
+.sr-page.opf-page--soft.opf-page--right::after {
+  left: 0;
+  background: linear-gradient(
+    to left,
+    rgb(28 26 23 / 0) 0%,
+    rgb(28 26 23 / 0.07) 70%,
+    rgb(28 26 23 / 0.22) 100%
+  );
+}
+
+/* A page's content. From here down every length is in design pixels (`--u`). */
+
+.sr-sheet {
+  container-type: size;
+  width: 100%;
+  height: 100%;
+}
+
+.sr-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: calc(44 * var(--u)) calc(40 * var(--u)) calc(40 * var(--u));
+  font-size: calc(14.5 * var(--u));
+}
+
+/* The outer margin is the wider one. */
+.sr-page.opf-page--soft.opf-page--left .sr-body {
+  padding-left: calc(48 * var(--u));
+}
+
+.sr-page.opf-page--soft.opf-page--right .sr-body {
+  padding-right: calc(48 * var(--u));
+}
+
+.sr-body--spread {
+  justify-content: space-between;
+}
+
+.sr-body--centred {
+  justify-content: center;
+}
+
+.sr-body .sr-mono {
+  font-size: calc(12 * var(--u));
+}
+
+.site-report .sr-foot {
+  margin-top: auto;
+}
+
+.site-report p.sr-foot {
+  min-height: calc(18 * var(--u));
+  color: var(--sr-muted);
+  font-size: calc(11 * var(--u));
+  line-height: 1.7;
+}
+
+.site-report p.sr-foot--note {
+  max-width: 34ch;
+  font-size: calc(12.5 * var(--u));
+  line-height: 1.5;
+}
+
+.sr-eyebrow {
+  color: var(--sr-accent);
+  font-family: var(--sr-mono-face);
+  font-size: calc(11 * var(--u));
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sr-eyebrow--split {
+  display: flex;
+  justify-content: space-between;
+}
+
+.sr-eyebrow--muted,
+.sr-eyebrow--split > :last-child {
+  color: var(--sr-muted);
+}
+
+.site-report .sr-headline {
+  margin: calc(10 * var(--u)) 0 calc(22 * var(--u));
+  font-family: var(--sr-serif);
+  font-size: calc(34 * var(--u));
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+/* A story page opens on its headline, with no eyebrow above to clear. */
+.site-report .sr-headline:first-child {
+  margin-top: 0;
+}
+
+.site-report .sr-headline--roomy {
+  margin-bottom: calc(26 * var(--u));
+}
+
+.site-report .sr-headline--contents {
+  margin-bottom: calc(30 * var(--u));
+  font-size: calc(40 * var(--u));
+}
+
+.sr-copy {
+  color: var(--sr-body);
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+.site-report .sr-copy p + p {
+  margin-top: calc(14 * var(--u));
+}
+
+/* Covers */
+
+.sr-masthead {
+  display: flex;
+  justify-content: space-between;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sr-page--back .sr-masthead {
+  color: #a89f8f;
+}
+
+.site-report .sr-title {
+  font-family: var(--sr-serif);
+  font-size: calc(88 * var(--u));
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 0.92;
+}
+
+.site-report .sr-standfirst {
+  margin-top: calc(28 * var(--u));
+  padding-top: calc(18 * var(--u));
+  border-top: 1px solid rgb(244 239 230 / 0.5);
+  font-family: var(--sr-serif);
+  font-size: calc(20 * var(--u));
+  font-style: italic;
+  font-weight: 300;
+  line-height: 1.35;
+}
+
+.site-report .sr-signoff {
+  font-family: var(--sr-serif);
+  font-size: calc(40 * var(--u));
+  font-style: italic;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.site-report .sr-pill {
+  align-self: flex-start;
+  padding: calc(10 * var(--u)) calc(18 * var(--u));
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  font-size: calc(13 * var(--u));
+}
+
+/* Contents */
+
+.sr-toc {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--sr-ink);
+}
+
+.site-report .sr-toc button {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(16 * var(--u));
+  padding: calc(16 * var(--u)) 0;
+  border-bottom: 1px solid var(--sr-rule);
+  text-align: left;
+}
+
+.site-report .sr-toc button:hover {
+  color: var(--sr-accent);
+}
+
+.sr-toc-text {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+}
+
+.sr-toc-title {
+  font-family: var(--sr-serif);
+  font-size: calc(22 * var(--u));
+  line-height: 1.1;
+}
+
+.sr-toc-sub {
+  color: var(--sr-muted);
+  font-size: calc(12.5 * var(--u));
+}
+
+.sr-toc .sr-mono {
+  color: var(--sr-muted);
+  font-size: calc(13 * var(--u));
+}
+
+/* Highlights */
+
+.sr-kpis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(22 * var(--u)) calc(28 * var(--u));
+}
+
+.sr-kpis > div {
+  padding-top: calc(10 * var(--u));
+  border-top: 1px solid var(--sr-ink);
+}
+
+.sr-kpi-label {
+  color: var(--sr-muted);
+  font-size: calc(12 * var(--u));
+}
+
+.sr-kpi-value {
+  margin: calc(6 * var(--u)) 0 calc(8 * var(--u));
+  font-family: var(--sr-serif);
+  font-size: calc(40 * var(--u));
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.site-report .sr-quote {
+  font-family: var(--sr-serif);
+  font-size: calc(30 * var(--u));
+  font-style: italic;
+  font-weight: 300;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  text-wrap: pretty;
+}
+
+.sr-quote-rule {
+  width: calc(64 * var(--u));
+  height: 1px;
+  margin: calc(24 * var(--u)) 0 calc(20 * var(--u));
+  background: var(--sr-ink);
+}
+
+.site-report .sr-quote ~ .sr-copy {
+  line-height: 1.6;
+}
+
+/* Traffic */
+
+.sr-bignum {
+  margin: calc(14 * var(--u)) 0 calc(4 * var(--u));
+  font-family: var(--sr-serif);
+  font-size: calc(58 * var(--u));
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.sr-body .sr-bignum-delta {
+  color: var(--sr-muted);
+  font-size: calc(13 * var(--u));
+}
+
+.sr-chart {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin-top: calc(22 * var(--u));
+}
+
+.sr-chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.sr-axis {
+  stroke: var(--sr-ink);
+}
+
+.sr-grid {
+  stroke: var(--sr-rule);
+  stroke-dasharray: 2 3;
+}
+
+.sr-area {
+  fill: var(--sr-accent);
+  opacity: 0.12;
+}
+
+.sr-line {
+  fill: none;
+  stroke: var(--sr-ink);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.sr-marker {
+  stroke: var(--sr-accent);
+}
+
+.sr-marker-dot {
+  fill: var(--sr-accent);
+}
+
+.sr-marker,
+.sr-marker-dot {
+  pointer-events: none;
+}
+
+.sr-tick {
+  fill: var(--sr-muted);
+  font-family: var(--sr-mono-face);
+  font-size: 9.5px;
+}
+
+.sr-tick--y {
+  font-size: 9px;
+}
+
+.sr-tip {
+  position: absolute;
+  top: 0;
+  padding: calc(5 * var(--u)) calc(9 * var(--u));
+  border-radius: 2px;
+  background: var(--sr-ink);
+  color: var(--sr-paper);
+  font-family: var(--sr-mono-face);
+  font-size: calc(12 * var(--u));
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.sr-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(16 * var(--u));
+  padding-top: calc(12 * var(--u));
+  border-top: 1px solid var(--sr-ink);
+}
+
+.sr-stat-label {
+  color: var(--sr-muted);
+  font-size: calc(11 * var(--u));
+}
+
+.sr-stat-value {
+  margin-top: calc(4 * var(--u));
+  font-family: var(--sr-serif);
+  font-size: calc(22 * var(--u));
+}
+
+.sr-stats .sr-mono {
+  color: var(--sr-muted);
+  font-size: calc(11 * var(--u));
+}
+
+/* Acquisition */
+
+.sr-bars {
+  display: flex;
+  flex-direction: column;
+  gap: calc(14 * var(--u));
+}
+
+.sr-bar {
+  display: grid;
+  grid-template-columns: calc(110 * var(--u)) 1fr calc(52 * var(--u));
+  align-items: center;
+  gap: calc(12 * var(--u));
+  font-size: calc(13 * var(--u));
+}
+
+.sr-bar .sr-mono {
+  font-size: calc(13 * var(--u));
+  text-align: right;
+}
+
+.sr-bar-track {
+  position: relative;
+  height: calc(22 * var(--u));
+  background: var(--sr-track);
+}
+
+.sr-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--sr-ink);
+}
+
+.sr-bar[data-active="true"] .sr-bar-fill {
+  background: var(--sr-accent);
+}
+
+.site-report .sr-bars + p.sr-foot {
+  font-size: calc(12 * var(--u));
+  line-height: 1.4;
+}
+
+.sr-moves {
+  border-top: 1px solid var(--sr-ink);
+  font-size: calc(13 * var(--u));
+}
+
+.sr-moves > div {
+  display: flex;
+  justify-content: space-between;
+  padding: calc(10 * var(--u)) 0;
+  border-bottom: 1px solid var(--sr-rule);
+}
+
+.sr-moves .sr-mono {
+  font-size: calc(13 * var(--u));
+}
+
+/* Top pages */
+
+.site-report .sr-ranked {
+  border-top: 1px solid var(--sr-ink);
+  list-style: none;
+}
+
+.sr-ranked li {
+  display: grid;
+  grid-template-columns: calc(24 * var(--u)) 1fr auto;
+  align-items: baseline;
+  gap: calc(12 * var(--u));
+  padding: calc(11 * var(--u)) 0;
+  border-bottom: 1px solid var(--sr-rule);
+}
+
+.sr-ranked li > .sr-mono:first-child {
+  color: var(--sr-muted);
+}
+
+.sr-ranked-name {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  min-width: 0;
+}
+
+.sr-ranked-title {
+  font-family: var(--sr-serif);
+  font-size: calc(18 * var(--u));
+  line-height: 1.15;
+}
+
+.sr-ranked-name .sr-mono {
+  overflow: hidden;
+  color: var(--sr-muted);
+  font-size: calc(11 * var(--u));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sr-ranked-views {
+  display: flex;
+  flex-direction: column;
+  gap: calc(3 * var(--u));
+  text-align: right;
+}
+
+.sr-body .sr-ranked-views > :first-child {
+  font-size: calc(14 * var(--u));
+}
+
+.sr-body .sr-ranked-views > :last-child {
+  font-size: calc(11 * var(--u));
+}
+
+.sr-columns {
+  display: flex;
+  align-items: flex-end;
+  gap: calc(6 * var(--u));
+  height: calc(120 * var(--u));
+  border-bottom: 1px solid var(--sr-ink);
+}
+
+.sr-columns span {
+  flex: 1;
+  background: var(--sr-ink);
+}
+
+.sr-columns span:first-child {
+  background: var(--sr-accent);
+}
+
+.sr-columns-caption {
+  display: flex;
+  justify-content: space-between;
+  margin-top: calc(8 * var(--u));
+  color: var(--sr-muted);
+}
+
+.sr-body .sr-columns-caption {
+  font-size: calc(11 * var(--u));
+}

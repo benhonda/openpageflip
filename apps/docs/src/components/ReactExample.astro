@@ -5,20 +5,23 @@
  * because MDX renders its children eagerly, and a text twin (see `isTextTwin`) must not try
  * to render React at all. Each example gets its own tag below, not a glob and a dynamic tag
  * like CoreExample, because Astro only hydrates a tag whose name is an import of this file.
+ * `showCode={false}` gives just the demo (the home page hero).
  */
 import Controlled from "../examples/react/Controlled.tsx";
 import HoverZoom from "../examples/react/HoverZoom.tsx";
 import Quickstart from "../examples/react/Quickstart.tsx";
 import Responsive from "../examples/react/Responsive.tsx";
 import Shadow from "../examples/react/Shadow.tsx";
+import SiteReport from "../examples/react/SiteReport.tsx";
 import { isTextTwin } from "../site.ts";
 import Example from "./Example.astro";
 
 interface Props {
-  name: "Controlled" | "HoverZoom" | "Quickstart" | "Responsive" | "Shadow";
+  name: "Controlled" | "HoverZoom" | "Quickstart" | "Responsive" | "Shadow" | "SiteReport";
+  showCode?: boolean;
 }
 
-const { name } = Astro.props;
+const { name, showCode = true } = Astro.props;
 const live = !isTextTwin(Astro.url);
 
 const sources = import.meta.glob<string>("../examples/react/*.tsx", {
@@ -30,10 +33,11 @@ const code = sources[`../examples/react/${name}.tsx`];
 if (code === undefined) throw new Error(`No React example named "${name}" in src/examples/react`);
 ---
 
-<Example code={code} lang="tsx" title={`${name}.tsx`}>
+<Example code={showCode ? code : undefined} lang="tsx" title={`${name}.tsx`}>
   {live && name === "Controlled" && <Controlled client:load />}
   {live && name === "HoverZoom" && <HoverZoom client:load />}
   {live && name === "Quickstart" && <Quickstart client:load />}
   {live && name === "Responsive" && <Responsive client:load />}
   {live && name === "Shadow" && <Shadow client:load />}
+  {live && name === "SiteReport" && <SiteReport client:load />}
 </Example>

@@ -11,6 +11,23 @@
   border-radius: 0.5rem;
 }
 
+/*
+ * The Site Report brings its own desk to sit on, so the frame steps aside. On the home page,
+ * which has no sidebar beside it, the frame also widens past the text column to give the open
+ * magazine the room it was drawn for.
+ */
+.example-demo:has(.site-report) {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+:root[data-has-hero] .example-demo:has(.site-report) {
+  --frame: min(78rem, 100vw - 2rem);
+  width: var(--frame);
+  margin-inline: calc((100% - var(--frame)) / 2);
+}
+
 .example-demo .book {
   margin: 0 auto;
   max-width: 48rem;
