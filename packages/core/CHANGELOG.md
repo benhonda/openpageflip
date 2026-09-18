@@ -1,5 +1,15 @@
 # @openpageflip/core
 
+## 0.5.0
+
+### Minor Changes
+
+- [`f29f7df`](https://github.com/benhonda/openpageflip/commit/f29f7df30a5c25ebe9b38e7dfbb1a5ceccb5cf16) Thanks [@benhonda](https://github.com/benhonda)! - A book looks right out of the box on white paper. `shadowOpacity` now defaults to `0.35` instead of `1`, which was a black bar across light pages, and the page in the air has a hairline edge, so a white page turning over a white page keeps its outline where no shadow falls. The edge is the new `.opf-page--turning` class in `styles.css`: recolour it with the `--opf-page-edge` CSS variable, or set that to `transparent` to remove it. For the look of earlier versions, pass `shadowOpacity: 1` and set `--opf-page-edge: transparent`.
+
+### Patch Changes
+
+- [`f29f7df`](https://github.com/benhonda/openpageflip/commit/f29f7df30a5c25ebe9b38e7dfbb1a5ceccb5cf16) Thanks [@benhonda](https://github.com/benhonda)! - `.opf-page--hard` and `.opf-page--soft` now say what a page is and stay put through a turn. A soft page on the back of a hard one (the page behind a cover) swings as a board while that sheet turns, and its class used to switch to `--hard` for the length of the turn, so anything you styled on `--soft` (a gutter shadow, a margin) blinked off as the cover moved, even on hover. How the page is drawn hasn't changed, only the class. For the state of a page right now there are `--flat` and `--turning`.
+
 ## 0.4.2
 
 ### Patch Changes
