@@ -51,6 +51,8 @@ export type FlipFrame = {
   /** Rotation about the spine for hard pages, in degrees. */
   readonly hardAngle: number;
   readonly shadow: ShadowData | null;
+  /** A hover cue for a page that starts off stage: only what has come past the spine is drawn. */
+  readonly peek: boolean;
 };
 
 /** Where a turn is, between the spread it started from and the spread it leads to. */
@@ -95,6 +97,13 @@ type Session = {
   readonly to: number;
   readonly pageWidth: number;
   readonly pageHeight: number;
+  /**
+   * A hover cue for a page that starts off stage: in portrait the page that turns back lies in the
+   * hidden half, where a furl of its far edge would show nothing (or float beside the book). Its
+   * cue is that page peeking in over the spine instead. A peek is never a turn in hand, however
+   * far past the spine the kernel says it is: let go, it always goes back.
+   */
+  readonly peek: boolean;
   fold: Fold | null;
   progress: number;
   hardAngle: number;
@@ -105,7 +114,10 @@ type Session = {
 
 /** Pointer travel before a press counts as a drag rather than a click. */
 const DRAG_THRESHOLD = 5;
-/** How deep a hovered edge furls: the crease sits this far in from the edge. */
+/**
+ * How deep a hovered edge furls: the crease sits this far in from the edge. A peek comes this far
+ * past the spine.
+ */
 const FURL = 30;
 /**
  * Where a corner sits when a fold starts from rest: `in` from the edge and `down` it. Exactly at
@@ -335,12 +347,16 @@ export class FlipController {
     return this.animateTo(from, { x: -pageWidth, y: yDest }, true, true);
   }
 
-  /** Let go of a dragged corner: complete the turn if it crossed the spine, otherwise drop it back. */
+  /**
+   * Let go of a fold: a page in hand completes the turn if it crossed the spine, otherwise it
+   * drops back. A peek is not in hand, so it only ever goes back, to the spine it came in over.
+   */
   private release(): Promise<boolean> {
     const session = this.session;
     if (session === null || session.fold === null) return Promise.resolve(false);
     const pos = session.fold.position;
     const y = session.corner === FlipCorner.bottom ? session.pageHeight : 0;
+    if (session.peek) return this.animateTo(pos, { x: 0, y }, false, true);
     return pos.x <= 0
       ? this.animateTo(pos, { x: -session.pageWidth, y }, true, true)
       : this.animateTo(pos, { x: session.pageWidth, y }, false, true);
@@ -409,12 +425,15 @@ export class FlipController {
     }
 
     if (!this.isPressable(containerPos)) return;
-    const session = this.start(containerPos);
+    const session = this.start(containerPos, true);
     if (session === null) return;
     this.setState(FlipState.foldCorner);
-    const from = this.restPoint(session);
+    const rest = this.restPoint(session);
+    const [from, to] = session.peek
+      ? [{ x: 0, y: rest.y }, this.peekPoint(session)]
+      : [rest, this.furlPoint(session)];
     this.applyFold(from);
-    void this.animateTo(from, this.furlPoint(session), false, false);
+    void this.animateTo(from, to, false, false);
   }
 
   /** The corner at rest, nudged in and down by `REST_NUDGE` so the fold is not degenerate. */
@@ -429,6 +448,11 @@ export class FlipController {
   /** The edge furled: the corner pulled straight in, so the crease runs parallel to the spine. */
   private furlPoint(session: Session): Point {
     return { x: session.pageWidth - 2 * FURL, y: this.restPoint(session).y };
+  }
+
+  /** The page peeking in: its edge pulled straight over the spine, so it shows as a strip along it. */
+  private peekPoint(session: Session): Point {
+    return { x: -FURL, y: this.restPoint(session).y };
   }
 
   /** The mouse left the book: let a furled edge settle. */
@@ -530,8 +554,11 @@ export class FlipController {
 
   // ---- the flip session -----------------------------------------------------------------------
 
-  /** Decide direction and corner from where the pointer is, and pick the pages that move. */
-  private start(containerPos: Point): Session | null {
+  /**
+   * Decide direction and corner from where the pointer is, and pick the pages that move. `cue`
+   * says the session is a hover cue rather than a turn.
+   */
+  private start(containerPos: Point, cue = false): Session | null {
     this.endSession();
     const bookPos = containerToBook(containerPos, this.rect);
     const direction = this.directionAt(bookPos);
@@ -571,6 +598,7 @@ export class FlipController {
       to: pair.to,
       pageWidth: this.rect.pageWidth,
       pageHeight: this.rect.height,
+      peek: cue && this.orientation === Orientation.portrait && direction === FlipDirection.back,
       fold: null,
       progress: 0,
       hardAngle: 0,
@@ -707,6 +735,7 @@ export class FlipController {
               progress: session.progress,
               hardAngle: session.hardAngle,
               shadow: session.shadow,
+              peek: session.peek,
             }
           : null,
     };

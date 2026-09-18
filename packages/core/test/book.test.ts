@@ -357,6 +357,48 @@ describe("options that switch behaviour off or change the layout", () => {
     expect(shadows(middle.container)).toEqual(["hard-outer", "hard-inner"]);
   });
 
+  test("in a single-page book a hard cover is drawn once, lifting, so it stays on show under a hover", async () => {
+    const { container, pages } = mount(300, { width: 300, height: 420, cover: true });
+    pointer(container, "pointermove", 285, 400, { buttons: 0 });
+    await frames(40);
+    // Lifted a little off the page, toward the reader. Drawn a second time as the far face of a
+    // spread's sheet, which a single page does not have, it turned face down and vanished.
+    const turned = /rotateY\(([-\d.]+)deg\)/.exec(pages[0]?.style.transform ?? "")?.[1];
+    expect(Number(turned)).toBeGreaterThan(270);
+    expect(Number(turned)).toBeLessThan(360);
+    const bounds = container.getBoundingClientRect();
+    expect(document.elementFromPoint(bounds.left + 150, bounds.top + 200)).toBe(pages[0]);
+  });
+
+  test("a peek shows only past the spine: nothing of the page coming back is drawn beside the book", async () => {
+    const s = stage(900);
+    s.container.style.marginLeft = "300px";
+    const book = createBook(s.container, {
+      width: 300,
+      height: 420,
+      layout: "single",
+      startPage: 2,
+    });
+    cleanup.push(() => {
+      book.destroy();
+      s.stage.remove();
+    });
+    pointer(s.container, "pointermove", 15, 400, { buttons: 0 });
+    await frames(40);
+    const bounds = s.container.getBoundingClientRect();
+    const at = (x: number): Element | null =>
+      document.elementFromPoint(bounds.left + x, bounds.top + 200);
+    expect(at(15)).toBe(s.pages[1]);
+    expect(at(60)).toBe(s.pages[2]);
+    // The rest of the turning page lies over the hidden half, left of the book.
+    expect(at(-60)).not.toBe(s.pages[1]);
+    // In hand it is a turn like any other, and the whole page is drawn.
+    pointer(s.container, "pointerdown", 15, 400);
+    pointer(s.container, "pointermove", 25, 400);
+    expect(at(-60)).toBe(s.pages[1]);
+    pointer(s.container, "pointercancel", 25, 400);
+  });
+
   test("easing shapes the corner's path", async () => {
     const seen: number[] = [];
     const { book } = mount(500, {

@@ -176,6 +176,52 @@ describe("FlipController", () => {
     expect(controller.frame().flip?.direction).toBe("back");
   });
 
+  test("in portrait the page that turns back is off stage, so its cue peeks in over the spine and never turns", () => {
+    const { controller, manual, progress, shown, last } = setup({ startPage: 2 }, 6, {
+      w: 300,
+      h: 420,
+    });
+    shown.length = 0;
+    controller.hover({ x: 40, y: 370 });
+    manual.advance(1000);
+    // Past the spine in page space (x < 0) is over the visible page: a strip as wide as a furl is deep.
+    expect(last().flip).toMatchObject({ direction: "back", flipping: 1, peek: true });
+    expect(last().flip?.fold.position.x).toBeCloseTo(-30, 6);
+
+    // The kernel counts a corner past the spine as a turn half made. Let go of, a peek still
+    // goes back: leaving the edge, or the book, never turns the page.
+    controller.hover({ x: 150, y: 370 });
+    manual.advance(1000);
+    expect(last().flip).toBeNull();
+    expect(progress.at(-1)?.progress).toBe(0);
+    controller.hover({ x: 40, y: 370 });
+    manual.advance(1000);
+    controller.hoverEnd();
+    manual.advance(1000);
+    expect(controller.page).toBe(2);
+    expect(shown).toEqual([]);
+
+    // The outer edge is on stage, so it furls like any other.
+    controller.hover({ x: 260, y: 370 });
+    manual.advance(1000);
+    expect(last().flip).toMatchObject({ direction: "forward", peek: false });
+  });
+
+  test("a press takes a peek in hand: the drag carries on from it as a turn, drawn whole", async () => {
+    const { controller, manual, last } = setup({ startPage: 2 }, 6, { w: 300, h: 420 });
+    controller.hover({ x: 40, y: 370 });
+    manual.advance(1000);
+    controller.pointerDown({ x: 40, y: 370 });
+    controller.pointerDrag({ x: 60, y: 370 });
+    expect(last().flip).toMatchObject({ direction: "back", peek: false });
+    expect(last().flip?.fold.position.x).toBeCloseTo(-50, 6);
+    // Pushed back over the spine and let go, it drops back like any drag that stopped short.
+    controller.pointerDrag({ x: -20, y: 370 });
+    controller.pointerUp({ x: -20, y: 370 });
+    manual.advance(2000);
+    expect(controller.page).toBe(2);
+  });
+
   test("flipTo during a running flip lands it first, then aims from there", async () => {
     const { controller, manual } = setup();
     void controller.flipNext(FlipCorner.top);

@@ -62,6 +62,26 @@ export function rotatePoint(point: Point, origin: Point, angle: number): Point {
 }
 
 /**
+ * The part of a polygon with `x <= maxX` (Sutherland–Hodgman against one edge). Empty when
+ * nothing with any area is left, so a polygon that only touches the line does not survive as a
+ * sliver.
+ */
+export function clipPolygonToMaxX(points: readonly Point[], maxX: number): readonly Point[] {
+  const kept: Point[] = [];
+  let from = points.at(-1);
+  if (from === undefined) return kept;
+  for (const to of points) {
+    if (from.x <= maxX !== to.x <= maxX) {
+      const t = (maxX - from.x) / (to.x - from.x);
+      kept.push({ x: maxX, y: from.y + (to.y - from.y) * t });
+    }
+    if (to.x <= maxX) kept.push(to);
+    from = to;
+  }
+  return kept.some((p) => p.x < maxX) ? kept : [];
+}
+
+/**
  * Keep `point` inside the circle around `center`. Returns the very same object when it is
  * already inside, so callers can detect clamping by identity.
  *

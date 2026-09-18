@@ -51,6 +51,16 @@ closed by design.
   snapped a mid-edge press into a diagonal fold. A click on a furled edge flips on from the furl.
   The parity suite drives our drags by travel and no longer compares hover, both listed under
   deliberate differences. Option `hoverCorners` became `hover`.
+- `[settled]` 2026-09-18: **In portrait the spine-side edge's cue is a peek.** The page that
+  turns back lies in the hidden half, so a furl of its far edge shows nothing, or floats beside
+  the book. Its cue is that page pulled `FURL` px over the spine instead: a strip along the
+  visible page's spine edge, under the pointer. The kernel counts a corner past the spine as a
+  turn half made, so two rules come with it (`Session.peek` in `controller.ts`): a peek let go of
+  always goes back, never on, and the renderer draws only what is past the spine, because the
+  rest of that page would be a half-page slab beside the book. A press takes it in hand as an
+  ordinary turn, drawn whole, carrying on from the peek. Rejected: no cue on that edge (the
+  original's behaviour, an action without a sign), and a cue that is not paper (a second visual
+  language). `flipProgress` reports a peek at just over a half, which is where that page is.
 - `[settled]` 2026-09-18: **Every binding is the same book seen from another side.**
   `binding: "left" | "right" | "top" | "bottom"`. `right` is a right-to-left book (a manga: the
   spine on the right, the cover alone on the left, a swipe to the right reads on), which is the
@@ -229,13 +239,6 @@ this library. These are the places where it was wrong and we did not copy it:
   because it changes the look every portrait user knows.
 
 ## Open questions
-
-- `[open]` 2026-09-18: in portrait, the spine-side edge turns back, but its cue is invisible: the
-  page that turns back is the hidden one to the left of the visible page, and a furl (or the
-  original's corner lift) moves its far corner, which is off the stage. A press and drag there
-  works, so nothing is broken, but the edge shows no sign it can be taken hold of. Worth a cue
-  drawn on the visible page's spine edge, or the back flip's furl mapped to it. Another agent has
-  a scratch test probing this (`packages/core/test/zz-scratch.test.ts` at the time of writing).
 
 - `[settled]` 2026-09-01: the React wrapper owns every page element. Each child of `FlipBook`
   renders inside a page `div` the wrapper controls; `<Page density style className>` is a

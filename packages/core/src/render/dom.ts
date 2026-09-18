@@ -11,7 +11,7 @@ import { type Axes, axesFor, isVertical, type ScreenSide } from "../axes.ts";
 import type { Frame, ShadowData } from "../controller.ts";
 import { pageToContainer } from "../coords.ts";
 import type { Point, RectPoints } from "../geometry/point.ts";
-import { rotatePoint } from "../geometry/point.ts";
+import { clipPolygonToMaxX, rotatePoint } from "../geometry/point.ts";
 import type { BookRect } from "../layout.ts";
 import {
   type Binding,
@@ -76,6 +76,13 @@ type SizingOptions = Pick<
   ResolvedOptions,
   "autoSize" | "size" | "width" | "height" | "minWidth" | "maxWidth" | "layout" | "binding"
 >;
+
+/** Element-local points as a `clip-path`. No points (a peek wholly off stage) clips everything. */
+function clipPath(points: readonly Point[]): string {
+  return points.length === 0
+    ? "inset(100%)"
+    : `polygon(${points.map((p) => `${p.x}px ${p.y}px`).join(", ")})`;
+}
 
 type Saved = { readonly cssText: string; readonly className: string };
 
@@ -198,8 +205,14 @@ export class DomRenderer {
       this.hideShadows();
       return;
     }
-    const liftsFromItself = !flippingHard && flip.flipping === frame.right;
+    // In portrait a page turning forward is the page on show. A soft one folds over itself as a
+    // copy; a hard one has already been drawn lifting, above, and has no second face to draw.
+    const isPageOnShow = flip.flipping === frame.right;
+    const liftsFromItself = !flippingHard && isPageOnShow;
     if (!liftsFromItself) this.dropClone();
+    // A peek is drawn only where it has come past the spine, which in its page space is x <= 0.
+    const onStage = (points: readonly Point[]): readonly Point[] =>
+      flip.peek ? clipPolygonToMaxX(points, 0) : points;
 
     if (flip.bottom !== null) {
       const bottomSide: Side = flip.direction === FlipDirection.back ? "left" : "right";
@@ -224,12 +237,14 @@ export class DomRenderer {
         ? "left"
         : "right";
     if (flippingHard) {
-      this.drawHard(flip.flipping, flippingSide, flip.hardAngle, Z.flipping, rect);
+      if (!isPageOnShow) {
+        this.drawHard(flip.flipping, flippingSide, flip.hardAngle, Z.flipping, rect);
+      }
     } else {
       this.drawSoft(
         flip.flipping,
         flippingSide,
-        flip.fold.flippingClip,
+        onStage(flip.fold.flippingClip),
         flip.fold.activeCorner,
         flip.fold.angle,
         flip.direction,
@@ -253,7 +268,7 @@ export class DomRenderer {
       });
     } else {
       this.hideHardShadows();
-      this.drawSoftShadows(flip.shadow, flip.fold.rect, rect);
+      this.drawSoftShadows(flip.shadow, flip.fold.rect, rect, onStage);
     }
   }
 
@@ -369,16 +384,15 @@ export class DomRenderer {
       { x: 0, y: 0 },
       rect.pageWidth,
     );
-    const polygon = area
-      .map((p) => {
+    const polygon = clipPath(
+      area.map((p) => {
         const local =
           direction === FlipDirection.back
             ? { x: -p.x + position.x, y: p.y - position.y }
             : { x: p.x - position.x, y: p.y - position.y };
-        const g = this.axes.local(rotatePoint(local, { x: 0, y: 0 }, angle), rect.pageWidth);
-        return `${g.x}px ${g.y}px`;
-      })
-      .join(", ");
+        return this.axes.local(rotatePoint(local, { x: 0, y: 0 }, angle), rect.pageWidth);
+      }),
+    );
     applyPageStyle(el, {
       position: "absolute",
       display: "block",
@@ -387,7 +401,7 @@ export class DomRenderer {
       top: "0",
       ...this.pageSize(rect),
       transformOrigin: `${at.origin.x}px ${at.origin.y}px`,
-      clipPath: `polygon(${polygon})`,
+      clipPath: polygon,
       transform: `translate3d(${at.translate.x}px, ${at.translate.y}px, 0) rotate(${this.axes.angle(angle)}rad)`,
     });
   }
@@ -419,7 +433,12 @@ export class DomRenderer {
 
   // ---- shadows --------------------------------------------------------------------------------
 
-  private drawSoftShadows(shadow: ShadowData, pageRect: RectPoints, rect: BookRect): void {
+  private drawSoftShadows(
+    shadow: ShadowData,
+    pageRect: RectPoints,
+    rect: BookRect,
+    onStage: (points: readonly Point[]) => readonly Point[],
+  ): void {
     const forward = shadow.direction === FlipDirection.forward;
     const at = pageToContainer(shadow.pos, rect, shadow.direction);
     const angle = shadow.angle + (3 * Math.PI) / 2;
@@ -433,17 +452,16 @@ export class DomRenderer {
     ): string => {
       const size = this.axes.size({ width, height: rect.height * 2 });
       const origin = { x: translate, y: 100 };
-      const clip = points
-        .map((p) => {
+      const clip = clipPath(
+        onStage(points).map((p) => {
           const offset = forward
             ? { x: p.x - shadow.pos.x, y: p.y - shadow.pos.y }
             : { x: -p.x + shadow.pos.x, y: p.y - shadow.pos.y };
-          const g = this.axes.local(rotatePoint(offset, origin, angle), width);
-          return `${g.x}px ${g.y}px`;
-        })
-        .join(", ");
+          return this.axes.local(rotatePoint(offset, origin, angle), width);
+        }),
+      );
       const to = this.placement({ x: at.x - origin.x, y: at.y - origin.y }, origin, width);
-      return `display: block; z-index: ${Z.shadow}; width: ${size.width}px; height: ${size.height}px; background: linear-gradient(${gradient}); transform-origin: ${to.origin.x}px ${to.origin.y}px; transform: translate3d(${to.translate.x}px, ${to.translate.y}px, 0) rotate(${this.axes.angle(angle)}rad); clip-path: polygon(${clip});`;
+      return `display: block; z-index: ${Z.shadow}; width: ${size.width}px; height: ${size.height}px; background: linear-gradient(${gradient}); transform-origin: ${to.origin.x}px ${to.origin.y}px; transform: translate3d(${to.translate.x}px, ${to.translate.y}px, 0) rotate(${this.axes.angle(angle)}rad); clip-path: ${clip};`;
     };
 
     this.shadows.outer.style.cssText = place(
