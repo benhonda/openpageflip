@@ -7,6 +7,7 @@
  * like CoreExample, because Astro only hydrates a tag whose name is an import of this file.
  */
 import Controlled from "../examples/react/Controlled.tsx";
+import HoverZoom from "../examples/react/HoverZoom.tsx";
 import Quickstart from "../examples/react/Quickstart.tsx";
 import Responsive from "../examples/react/Responsive.tsx";
 import Shadow from "../examples/react/Shadow.tsx";
@@ -14,7 +15,7 @@ import { isTextTwin } from "../site.ts";
 import Example from "./Example.astro";
 
 interface Props {
-  name: "Controlled" | "Quickstart" | "Responsive" | "Shadow";
+  name: "Controlled" | "HoverZoom" | "Quickstart" | "Responsive" | "Shadow";
 }
 
 const { name } = Astro.props;
@@ -31,6 +32,7 @@ if (code === undefined) throw new Error(`No React example named "${name}" in src
 
 <Example code={code} lang="tsx" title={`${name}.tsx`}>
   {live && name === "Controlled" && <Controlled client:load />}
+  {live && name === "HoverZoom" && <HoverZoom client:load />}
   {live && name === "Quickstart" && <Quickstart client:load />}
   {live && name === "Responsive" && <Responsive client:load />}
   {live && name === "Shadow" && <Shadow client:load />}

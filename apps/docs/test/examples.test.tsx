@@ -66,4 +66,46 @@ describe("react examples", () => {
       .toBeGreaterThan(1);
     await screen.unmount();
   });
+
+  it("HoverZoom zooms in under a mouse, and the zoomed book still finds its own edge", async () => {
+    const { default: HoverZoom } = await import("../src/examples/react/HoverZoom.tsx");
+    const screen = await render(<HoverZoom />);
+    await expect
+      .poll(() => screen.container.querySelectorAll("[data-opf-page]").length)
+      .toBeGreaterThan(1);
+    const frame = screen.container.querySelector<HTMLElement>(".book");
+    const book = frame?.firstElementChild;
+    if (!frame || !book) throw new Error("the example lost its frame");
+    /** A mouse at a fraction of the frame, which the zoom never moves. */
+    const mouseAt = (fx: number, fy: number): void => {
+      const box = frame.getBoundingClientRect();
+      book.dispatchEvent(
+        new PointerEvent("pointermove", {
+          clientX: box.left + box.width * fx,
+          clientY: box.top + box.height * fy,
+          pointerType: "mouse",
+          bubbles: true,
+        }),
+      );
+    };
+    const zoom = () => frame.style.getPropertyValue("--zoom");
+
+    mouseAt(0.75, 0.5);
+    expect(zoom()).toBe("2");
+    await expect
+      .poll(() => book.getBoundingClientRect().width / frame.getBoundingClientRect().width)
+      .toBeCloseTo(2);
+
+    // The outer edge, reached while the book is drawn at twice its size: the book has to furl
+    // it, which puts the zoom away.
+    mouseAt(0.99, 0.5);
+    expect(zoom()).toBe("1");
+    expect(frame.style.overflow).toBe("visible");
+
+    mouseAt(0.75, 0.5);
+    expect(zoom()).toBe("2");
+    frame.dispatchEvent(new PointerEvent("pointerout", { pointerType: "mouse", bubbles: true }));
+    expect(zoom()).toBe("1");
+    await screen.unmount();
+  });
 });

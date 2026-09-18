@@ -1,0 +1,16 @@
+---
+title: Zoom on hover
+description: Zoom into the page under the mouse with a CSS scale of your own, on a book that still finds its edges while it's scaled.
+---
+
+import ReactExample from "../../../components/ReactExample.astro";
+
+There's no zoom option in the library, and that's on purpose. A zoom is mostly decisions about your book - a lens or the whole page, how far in, whether there's a sharper image to swap to - and none of that is the library's to guess. What it does promise is that you can scale it. Put a `transform: scale()` or a `zoom` on the book, or on anything around it, and a press still lands on the page where the reader put it, so the edges furl and drag from the right place at any size.
+
+This one scales the book about the mouse, which keeps the spot under the pointer where it was. So moving the mouse pans around the page, and the outer edge is still under the pointer when you get to it. Rest the mouse on the small print, then head for the edge and turn the page:
+
+<ReactExample name="HoverZoom" />
+
+The zoom steps back whenever the book leaves its `read` state, which covers a furled edge, a drag and a flip. It has to, really - a turning page folds out past the book's box, and the frame that clips the zoom would cut it off.
+
+It's for a mouse only, since a finger doesn't hover. And it's scale that the book sees through (even or uneven), not rotation or skew.
