@@ -28,6 +28,7 @@ const Z = {
   flat: 1,
   bottom: 3,
   hardShadow: 4,
+  peekShadow: 4,
   flipping: 5,
   hardInnerShadow: 5,
   shadow: 10,
@@ -210,9 +211,6 @@ export class DomRenderer {
     const isPageOnShow = flip.flipping === frame.right;
     const liftsFromItself = !flippingHard && isPageOnShow;
     if (!liftsFromItself) this.dropClone();
-    // A peek is drawn only where it has come past the spine, which in its page space is x <= 0.
-    const onStage = (points: readonly Point[]): readonly Point[] =>
-      flip.peek ? clipPolygonToMaxX(points, 0) : points;
 
     if (flip.bottom !== null) {
       const bottomSide: Side = flip.direction === FlipDirection.back ? "left" : "right";
@@ -244,7 +242,8 @@ export class DomRenderer {
       this.drawSoft(
         flip.flipping,
         flippingSide,
-        onStage(flip.fold.flippingClip),
+        // A peek is drawn only where it has come past the spine, which in its page space is x <= 0.
+        flip.peek ? clipPolygonToMaxX(flip.fold.flippingClip, 0) : flip.fold.flippingClip,
         flip.fold.activeCorner,
         flip.fold.angle,
         flip.direction,
@@ -268,7 +267,8 @@ export class DomRenderer {
       });
     } else {
       this.hideHardShadows();
-      this.drawSoftShadows(flip.shadow, flip.fold.rect, rect, onStage);
+      if (flip.peek) this.drawPeekShadow(flip.shadow, flip.fold.flippingClip, rect);
+      else this.drawSoftShadows(flip.shadow, flip.fold.rect, rect);
     }
   }
 
@@ -433,12 +433,7 @@ export class DomRenderer {
 
   // ---- shadows --------------------------------------------------------------------------------
 
-  private drawSoftShadows(
-    shadow: ShadowData,
-    pageRect: RectPoints,
-    rect: BookRect,
-    onStage: (points: readonly Point[]) => readonly Point[],
-  ): void {
+  private drawSoftShadows(shadow: ShadowData, pageRect: RectPoints, rect: BookRect): void {
     const forward = shadow.direction === FlipDirection.forward;
     const at = pageToContainer(shadow.pos, rect, shadow.direction);
     const angle = shadow.angle + (3 * Math.PI) / 2;
@@ -453,7 +448,7 @@ export class DomRenderer {
       const size = this.axes.size({ width, height: rect.height * 2 });
       const origin = { x: translate, y: 100 };
       const clip = clipPath(
-        onStage(points).map((p) => {
+        points.map((p) => {
           const offset = forward
             ? { x: p.x - shadow.pos.x, y: p.y - shadow.pos.y }
             : { x: -p.x + shadow.pos.x, y: p.y - shadow.pos.y };
@@ -483,6 +478,25 @@ export class DomRenderer {
       [pageRect.topLeft, pageRect.topRight, pageRect.bottomRight, pageRect.bottomLeft],
       `${this.toward(forward ? "left" : "right")}, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0.05) 15%, rgba(0, 0, 0, ${shadow.opacity}) 35%, rgba(0, 0, 0, 0) 100%`,
     );
+  }
+
+  /**
+   * The shadow a peeking page's edge drops on the page it lies over, as wide as the peek is deep.
+   * The fold's own shadows hug its crease, which for a peek is half a page away in the hidden
+   * half, so none of them reaches the strip on show; they are left out.
+   */
+  private drawPeekShadow(shadow: ShadowData, flippingClip: readonly Point[], rect: BookRect): void {
+    this.shadows.inner.style.cssText = "display: none";
+    // A peek turns back, so its page space runs leftward from the spine: the edge is its least x.
+    const depth = -Math.min(0, ...flippingClip.map((p) => p.x));
+    if (depth === 0) {
+      this.shadows.outer.style.cssText = "display: none";
+      return;
+    }
+    const spine = rect.left + rect.width / 2;
+    const box = this.axes.size({ width: depth, height: rect.height });
+    const at = this.placement({ x: spine + depth, y: rect.top }, { x: 0, y: 0 }, depth).translate;
+    this.shadows.outer.style.cssText = `display: block; z-index: ${Z.peekShadow}; width: ${box.width}px; height: ${box.height}px; left: ${at.x}px; top: ${at.y}px; background: linear-gradient(${this.toward("right")}, rgba(0, 0, 0, ${shadow.opacity}), rgba(0, 0, 0, 0));`;
   }
 
   /**

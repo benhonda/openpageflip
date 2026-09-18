@@ -62,10 +62,12 @@ closed by design.
   visible page's spine edge, under the pointer. The kernel counts a corner past the spine as a
   turn half made, so two rules come with it (`Session.peek` in `controller.ts`): a peek let go of
   always goes back, never on, and the renderer draws only what is past the spine, because the
-  rest of that page would be a half-page slab beside the book. A press takes it in hand as an
-  ordinary turn, drawn whole, carrying on from the peek. Rejected: no cue on that edge (the
-  original's behaviour, an action without a sign), and a cue that is not paper (a second visual
-  language). `flipProgress` reports a peek at just over a half, which is where that page is.
+  rest of that page would be a half-page slab beside the book. The fold's shadows hug its crease,
+  half a page off stage, so the strip drops one of its own on the page under it
+  (`drawPeekShadow`). A press takes it in hand as an ordinary turn, drawn whole, carrying on from
+  the peek. Rejected: no cue on that edge (the original's behaviour, an action without a sign),
+  and a cue that is not paper (a second visual language). `flipProgress` reports a peek at just
+  over a half, which is where that page is.
 - `[settled]` 2026-09-18: **Every binding is the same book seen from another side.**
   `binding: "left" | "right" | "top" | "bottom"`. `right` is a right-to-left book (a manga: the
   spine on the right, the cover alone on the left, a swipe to the right reads on), which is the

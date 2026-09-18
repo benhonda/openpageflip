@@ -392,6 +392,15 @@ describe("options that switch behaviour off or change the layout", () => {
     expect(at(60)).toBe(s.pages[2]);
     // The rest of the turning page lies over the hidden half, left of the book.
     expect(at(-60)).not.toBe(s.pages[1]);
+    // The fold's own shadows hug its crease, off stage. The strip drops its own on the page under
+    // it, from its edge and as wide as it is deep.
+    const shadows = Array.from(s.container.querySelectorAll<HTMLElement>(".opf-shadow")).filter(
+      (el) => el.style.display !== "none",
+    );
+    expect(shadows.map((el) => el.className.replace(/.*--/, ""))).toEqual(["outer"]);
+    const shadow = shadows[0]?.getBoundingClientRect();
+    expect(shadow?.left).toBeCloseTo(bounds.left + 30, 0);
+    expect(shadow?.width).toBeCloseTo(30, 0);
     // In hand it is a turn like any other, and the whole page is drawn.
     pointer(s.container, "pointerdown", 15, 400);
     pointer(s.container, "pointermove", 25, 400);
