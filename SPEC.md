@@ -93,6 +93,18 @@ closed by design.
   the host would still have to copy our duration, which scales with the path and can be cut
   short by a press), and the library drawing a ground shadow itself (a look, not geometry).
   `apps/docs/src/examples/react/Shadow.tsx` is the use it was built for.
+- `[settled]` 2026-09-18: **Hover zoom is the host's; the library's part is to work when it is
+  scaled.** A zoom is a look (a lens or the whole book, how far, which image), the middle of a
+  page already belongs to the browser and hover to the edge strip, and the original has no zoom
+  for the oracle to hold one to. What a host cannot do for itself is make a scaled book take
+  input correctly, so that is ours: `local` in `packages/core/src/input.ts` brings the pointer
+  back into the container's layout pixels (drawn box over layout box, the container's border
+  taken off), for `transform: scale()` and CSS `zoom`, even or uneven; rotation and skew are not
+  undone. "A book the host has scaled or bordered" in `packages/core/test/book.test.ts` holds a
+  scaled book to its plain twin, and `apps/docs/src/examples/react/HoverZoom.tsx` is the zoom,
+  built from a CSS scale about the pointer and `changeState`. Rejected: a `zoom` option in core
+  (the opinions above, and it would settle pinch zoom below by accident) and a separate zoom
+  package (nothing to share until pinch zoom is designed).
 
 ### Docs (settled 2026-09-01)
 
@@ -173,7 +185,9 @@ a test and a docs page.
   (StPageFlip #25, #10, #53, #29; react #30, #48).
 - `destroy()` stops the render loop and restores the DOM (StPageFlip #71).
 - Keyboard navigation, ARIA, `prefers-reduced-motion`.
-- `[open]` Pinch zoom (StPageFlip #15). Probably post-1.0; decide when the renderer exists.
+- `[open]` Pinch zoom (StPageFlip #15). Probably post-1.0; decide when the renderer exists. A
+  host's own scale already works (see the hover zoom decision), so what is open is only whether
+  the library should own the gesture.
 - Top and bottom binding (StPageFlip #20, PR #46). Landed 2026-09-18 as `binding: "top"` and
   `"bottom"`; see Decisions.
 - `[open]` Soft cover (StPageFlip #20). Post-1.0 unless cheap.

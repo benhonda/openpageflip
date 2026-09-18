@@ -22,12 +22,21 @@ export function attachInput(
 ): () => void {
   let press: Press | null = null;
 
-  /** The pointer's position in book space. */
+  /**
+   * The pointer's position in book space. The book is laid out in the container's own pixels
+   * (`clientWidth`), but the pointer arrives in the viewport's, and a host that scales the book
+   * (a zoom, `transform: scale()`) makes the two differ: the drawn box over the layout box is that
+   * scale, and dividing by it brings the pointer home. Rotation and skew are not undone. A
+   * container hidden mid-press has no box to measure (0 / 0), and counts as unscaled.
+   */
   const local = (event: PointerEvent): Point => {
     const bounds = container.getBoundingClientRect();
-    return axesFor(options.binding, bounds).toBook({
-      x: event.clientX - bounds.left,
-      y: event.clientY - bounds.top,
+    const scaleX = bounds.width / container.offsetWidth || 1;
+    const scaleY = bounds.height / container.offsetHeight || 1;
+    const size = { width: container.clientWidth, height: container.clientHeight };
+    return axesFor(options.binding, size).toBook({
+      x: (event.clientX - bounds.left) / scaleX - container.clientLeft,
+      y: (event.clientY - bounds.top) / scaleY - container.clientTop,
     });
   };
 

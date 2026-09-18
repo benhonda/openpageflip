@@ -439,6 +439,81 @@ describe("options that switch behaviour off or change the layout", () => {
   });
 });
 
+/**
+ * A host may scale the book (a zoom) or give it a border. Neither changes its layout, so the same
+ * gesture on the page has to draw the same frame as it does on a plain book.
+ */
+describe("a book the host has scaled or bordered", () => {
+  const options = { width: 250, height: 350, flipDuration: 40 } as const;
+  /** `wrap` styles the stage, `box` the container; `sx, sy, inset` are what they do to a pointer. */
+  const hosts = [
+    { name: "transform: scale(2)", wrap: "transform: scale(2); transform-origin: 0 0;", sx: 2 },
+    { name: "a scale around the centre", wrap: "transform: scale(0.5);", sx: 0.5 },
+    { name: "an uneven scale", wrap: "transform: scale(1.5, 0.75);", sx: 1.5, sy: 0.75 },
+    { name: "zoom: 2", wrap: "zoom: 2;", sx: 2 },
+    { name: "a border", box: "border: 12px solid;", sx: 1, inset: 12 },
+    {
+      name: "a border under a scale",
+      wrap: "transform: scale(2);",
+      box: "border: 12px solid;",
+      sx: 2,
+      inset: 12,
+    },
+  ];
+
+  /** From the outer edge to mid-page. A top- or bottom-bound book is one page wide and two tall. */
+  const drags = {
+    left: [
+      [495, 40],
+      [250, 120],
+    ],
+    right: [
+      [5, 40],
+      [250, 120],
+    ],
+    top: [
+      [40, 695],
+      [120, 350],
+    ],
+    bottom: [
+      [40, 5],
+      [120, 350],
+    ],
+  } as const;
+
+  /**
+   * A drag held mid-fold, on a plain book and on the host's. It starts closer to the outer edge
+   * than a border is wide, so a pointer measured from the border's outside misses the page.
+   */
+  function twins(host: (typeof hosts)[number], binding: keyof typeof drags) {
+    const plain = mount(500, { ...options, binding });
+    const hosted = mount(500, { ...options, binding });
+    hosted.stage.style.cssText += host.wrap ?? "";
+    hosted.container.style.cssText += host.box ?? "";
+    const { sx, sy = sx, inset = 0 } = host;
+    const [from, to] = drags[binding];
+    for (const [type, [x, y]] of [
+      ["pointerdown", from],
+      ["pointermove", to],
+    ] as const) {
+      pointer(plain.container, type, x, y);
+      pointer(hosted.container, type, (x + inset) * sx, (y + inset) * sy);
+    }
+    return { plain, hosted };
+  }
+
+  for (const host of hosts) {
+    for (const binding of ["left", "right", "top", "bottom"] as const) {
+      test(`${host.name}, bound ${binding}: a drag folds the page where the pointer is`, () => {
+        const { plain, hosted } = twins(host, binding);
+        expect(plain.book.state).toBe(FlipState.userFold);
+        expect(hosted.book.state).toBe(FlipState.userFold);
+        expect(hosted.container.innerHTML).toBe(plain.container.innerHTML);
+      });
+    }
+  }
+});
+
 test("a Book exposes state through getters, not snapshots", () => {
   const { book } = mount();
   const snapshot: Book = book;
