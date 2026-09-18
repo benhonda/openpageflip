@@ -141,6 +141,15 @@ const scenarios: Scenario[] = [
     },
     settle: 300,
   },
+  // The peek's clip and its shadow are the renderer's own, outside the kernel's fold, so each
+  // binding has to map them itself.
+  {
+    name: "portrait-peek",
+    box: PORTRAIT,
+    startPage: 2,
+    drive: (at, container) => press(container, "pointermove", at({ x: 40, y: 300 }), false),
+    settle: 400,
+  },
 ];
 
 /**

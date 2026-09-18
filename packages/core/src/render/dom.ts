@@ -486,13 +486,10 @@ export class DomRenderer {
    * half, so none of them reaches the strip on show; they are left out.
    */
   private drawPeekShadow(shadow: ShadowData, flippingClip: readonly Point[], rect: BookRect): void {
-    this.shadows.inner.style.cssText = "display: none";
+    this.hideSoftShadows();
     // A peek turns back, so its page space runs leftward from the spine: the edge is its least x.
     const depth = -Math.min(0, ...flippingClip.map((p) => p.x));
-    if (depth === 0) {
-      this.shadows.outer.style.cssText = "display: none";
-      return;
-    }
+    if (depth === 0) return;
     const spine = rect.left + rect.width / 2;
     const box = this.axes.size({ width: depth, height: rect.height });
     const at = this.placement({ x: spine + depth, y: rect.top }, { x: 0, y: 0 }, depth).translate;
