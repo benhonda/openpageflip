@@ -1,5 +1,12 @@
 # @openpageflip/react
 
+## 0.4.2
+
+### Patch Changes
+
+- Updated dependencies [[`d65839e`](https://github.com/benhonda/openpageflip/commit/d65839e8b8c54cca686acac7ac4b6edae0201f96)]:
+  - @openpageflip/core@0.4.2
+
 ## 0.4.1
 
 ### Patch Changes
