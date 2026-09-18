@@ -28,6 +28,11 @@ closed by design.
 - `[settled]` ESM + IIFE (CDN global) for core, ESM only for react. No CommonJS.
 - `[settled]` Versions start at 0.x; 1.0.0 is tagged when parity tests and the backlog
   list below are green. Not 3.0: new scope, new API, no continuity claim.
+- `[settled]` 2026-09-18: **Every published package shares one version** (Changesets `fixed`
+  in `.changeset/config.json`). Independent numbers (core 0.4.0 beside react 0.2.0) said nothing
+  about which pair belongs together and read as disorder in the one releases list. The cost, a
+  bump for a package that did not change, is small: react already rode along with most core
+  releases through its peer range.
 - `[settled]` No compatibility shim for the old API. A migration guide covers renames.
 - `[settled]` Contact the original author for an npm deprecation notice after 1.0 (Ben's
   call and message, not an agent's).
