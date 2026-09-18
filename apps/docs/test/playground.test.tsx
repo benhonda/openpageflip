@@ -40,7 +40,10 @@ it("rebuilds the book from its controls and reports what the book does", async (
 
   // An animated flip moves the progress bar, which rests on 1 once the page has landed.
   await screen.getByRole("button", { name: "flipPrev" }).click();
-  await expect.poll(() => screen.container.querySelector("progress")?.value).toBe(1);
+  // The flip takes `flipDuration` (1s), which is also `poll`'s default timeout: give it room to land.
+  await expect
+    .poll(() => screen.container.querySelector("progress")?.value, { timeout: 5000 })
+    .toBe(1);
   await expect.element(screen.getByText("flip: page 8")).toBeVisible();
 
   await screen.unmount();
