@@ -2,8 +2,9 @@
  * Mounts the original `page-flip` and this library in identical stages, drives them to the same
  * state, and compares screenshots pixel by pixel. Everything runs inside the test browser.
  */
-import { commands, page } from "@vitest/browser/context";
+
 import { PageFlip } from "page-flip";
+import { commands, page } from "vitest/browser";
 import { type Book, type CreateBookOptions, createBook } from "../../src/index.ts";
 import "../../src/styles.css";
 
@@ -194,9 +195,52 @@ function toPng(image: ImageData): string {
 }
 
 /**
- * Screenshot both stages and compare. On a mismatch beyond `tolerance`, the original, ours and a
- * red-marked diff are written to `__screenshots__/parity/` next to the test so a person can look.
- * `ignore` names stage areas (CSS pixels) where the two are known to differ on purpose.
+ * Screenshot two stages, one after the other. One stage is on screen at a time, so both rasterise
+ * at the same position; a hidden element cannot be captured, so this has to be sequential.
+ */
+async function captureBoth(
+  first: HTMLElement,
+  second: HTMLElement,
+): Promise<[ImageData, ImageData]> {
+  second.style.visibility = "hidden";
+  await frames(1);
+  const a = await capture(first);
+  second.style.visibility = "visible";
+  first.style.visibility = "hidden";
+  await frames(1);
+  const b = await capture(second);
+  first.style.visibility = "visible";
+  return [a, b];
+}
+
+/**
+ * On a mismatch beyond `tolerance`, both images and a red-marked diff are written under
+ * `__screenshots__/<dir>/` next to the test so a person can look.
+ */
+async function report(
+  dir: string,
+  name: string,
+  a: ImageData,
+  b: ImageData,
+  result: Comparison & { diff: ImageData },
+  tolerance: number,
+): Promise<void> {
+  console.info(`${dir} ${name}: ${(result.ratio * 100).toFixed(3)}% of pixels differ`);
+  if (result.ratio <= tolerance) return;
+  const base = `__screenshots__/${dir}/${name}`;
+  await Promise.all([
+    commands.writeFile(`${base}.a.png`, toPng(a), { encoding: "base64" }),
+    commands.writeFile(`${base}.b.png`, toPng(b), { encoding: "base64" }),
+    commands.writeFile(`${base}.diff.png`, toPng(result.diff), { encoding: "base64" }),
+  ]);
+  throw new Error(
+    `${name}: ${result.mismatch} of ${result.total} pixels differ (${(result.ratio * 100).toFixed(2)}%, tolerance ${(tolerance * 100).toFixed(2)}%). Screenshots written to ${base}.*.png`,
+  );
+}
+
+/**
+ * Screenshot both stages and compare. `ignore` names stage areas (CSS pixels) where the two are
+ * known to differ on purpose.
  */
 export async function expectVisualParity(
   name: string,
@@ -205,16 +249,7 @@ export async function expectVisualParity(
   tolerance = 0.005,
   ignore: readonly Rect[] = [],
 ): Promise<Comparison> {
-  // One stage on screen at a time, so both rasterise at the same position; a hidden element
-  // cannot be captured, so this has to be sequential.
-  ours.style.visibility = "hidden";
-  await frames(1);
-  const a = await capture(original);
-  ours.style.visibility = "visible";
-  original.style.visibility = "hidden";
-  await frames(1);
-  const b = await capture(ours);
-  original.style.visibility = "visible";
+  const [a, b] = await captureBoth(original, ours);
   const scale = a.width / original.getBoundingClientRect().width;
   const result = compare(
     a,
@@ -226,17 +261,48 @@ export async function expectVisualParity(
       height: r.height * scale,
     })),
   );
-  console.info(`parity ${name}: ${(result.ratio * 100).toFixed(3)}% of pixels differ`);
-  if (result.ratio > tolerance) {
-    const dir = `__screenshots__/parity/${name}`;
-    await Promise.all([
-      commands.writeFile(`${dir}.original.png`, toPng(a), { encoding: "base64" }),
-      commands.writeFile(`${dir}.ours.png`, toPng(b), { encoding: "base64" }),
-      commands.writeFile(`${dir}.diff.png`, toPng(result.diff), { encoding: "base64" }),
-    ]);
-    throw new Error(
-      `${name}: ${result.mismatch} of ${result.total} pixels differ (${(result.ratio * 100).toFixed(2)}%, tolerance ${(tolerance * 100).toFixed(2)}%). Screenshots written to ${dir}.*.png`,
-    );
+  await report("parity", name, a, b, result, tolerance);
+  return result;
+}
+
+/**
+ * Where a pixel of the reference image is found in the other: given `x, y` in the reference
+ * (of the given size), the source pixel in the image being remapped.
+ */
+export type Remap = (x: number, y: number, size: { width: number; height: number }) => Pos;
+
+/** The image seen through `remap`, in the reference's `width` x `height`. */
+function remapImage(image: ImageData, width: number, height: number, remap: Remap): ImageData {
+  const out = new ImageData(width, height);
+  const size = { width, height };
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const source = remap(x, y, size);
+      const from = (source.y * image.width + source.x) * 4;
+      const to = (y * width + x) * 4;
+      out.data[to] = image.data[from] ?? 0;
+      out.data[to + 1] = image.data[from + 1] ?? 0;
+      out.data[to + 2] = image.data[from + 2] ?? 0;
+      out.data[to + 3] = image.data[from + 3] ?? 0;
+    }
   }
+  return out;
+}
+
+/**
+ * Every binding is the left-bound book seen from another side. Screenshot both stages and compare
+ * the left-bound one with the other seen through `remap`, pixel for pixel.
+ */
+export async function expectParityUnder(
+  name: string,
+  leftBound: HTMLElement,
+  other: HTMLElement,
+  remap: Remap,
+  tolerance = 0.005,
+): Promise<Comparison> {
+  const [a, b] = await captureBoth(leftBound, other);
+  const seen = remapImage(b, a.width, a.height, remap);
+  const result = compare(a, seen, []);
+  await report("binding", name, a, seen, result, tolerance);
   return result;
 }

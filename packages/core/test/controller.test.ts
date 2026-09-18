@@ -1,9 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { FlipController, type Frame } from "../src/controller.ts";
+import { FlipController, type Frame, REST_NUDGE } from "../src/controller.ts";
 import { computeLayout } from "../src/layout.ts";
 import {
   type BookOptions,
   FlipCorner,
+  FlipDirection,
   FlipState,
   Orientation,
   type ResolvedOptions,
@@ -228,21 +229,23 @@ describe("FlipController", () => {
     expect(await settle(controller.flipTo(4, FlipCorner.top), manual)).toBe(false);
   });
 
-  test("hovering a corner lifts it over a quarter of flipDuration; leaving settles it as slowly", () => {
+  test("hovering an edge furls it over a quarter of flipDuration; leaving settles it as slowly", () => {
     const { controller, manual, last } = setup();
     controller.hover({ x: 470, y: 30 });
     expect(controller.currentState).toBe(FlipState.foldCorner);
-    // Halfway through the 250ms lift the corner is part way up, not already there.
+    // Halfway through the 250ms furl the edge is part way in, not already there.
     for (let i = 0; i < 8; i++) manual.advance(16);
     const midway = last().flip?.fold.position;
-    expect(midway?.x).toBeGreaterThan(200);
+    expect(midway?.x).toBeGreaterThan(190);
     expect(midway?.x).toBeLessThan(249);
     for (let i = 0; i < 10; i++) manual.advance(16);
-    expect(last().flip?.fold.position).toEqual({ x: 200, y: 50 });
+    // The corner is pulled straight in: the crease runs parallel to the spine, 30px in.
+    expect(last().flip?.fold.position).toEqual({ x: 190, y: REST_NUDGE.down });
+    expect(Math.abs(last().flip?.fold.angle ?? 1)).toBeLessThan(0.05);
 
     controller.hoverEnd();
     expect(controller.currentState).toBe(FlipState.read);
-    // The drop animates too: part way through, the corner is still folded.
+    // The drop animates too: part way through, the edge is still furled.
     for (let i = 0; i < 8; i++) manual.advance(16);
     expect(last().flip).not.toBeNull();
     for (let i = 0; i < 10; i++) manual.advance(16);
@@ -250,32 +253,32 @@ describe("FlipController", () => {
     expect(controller.page).toBe(0);
   });
 
-  test("the pointer takes over a hovered corner mid-lift, and leaving mid-drop resumes the fold", () => {
-    const { controller, manual, last } = setup();
-    controller.hover({ x: 470, y: 30 });
-    manual.advance(16);
-    controller.hover({ x: 455, y: 45 });
-    manual.advance(16);
-    // The lift no longer runs: the fold stays where the pointer put it.
-    expect(last().flip?.fold.position).toEqual({ x: 205, y: 45 });
-    controller.hover({ x: 300, y: 175 });
-    manual.advance(16);
-    expect(controller.currentState).toBe(FlipState.read);
-    controller.hover({ x: 455, y: 45 });
-    expect(controller.currentState).toBe(FlipState.foldCorner);
-    manual.advance(16);
-    expect(last().flip?.fold.position).toEqual({ x: 205, y: 45 });
-  });
-
-  test("a settling corner is not restarted by the pointer moving on; it lands on schedule", () => {
+  test("the furl holds anywhere along the edge, and settles when the pointer leaves it", () => {
     const { controller, manual, last } = setup();
     controller.hover({ x: 470, y: 30 });
     for (let i = 0; i < 20; i++) manual.advance(16);
-    expect(last().flip?.fold.position).toEqual({ x: 200, y: 50 });
-
-    // Off the corner, and the mouse keeps moving while the corner settles.
+    const furled = last().flip?.fold.position;
+    // Down the edge, across the midline, to the other corner: nothing changes.
+    for (const y of [150, 200, 320]) {
+      controller.hover({ x: 470, y });
+      manual.advance(16);
+      expect(controller.currentState).toBe(FlipState.foldCorner);
+      expect(last().flip?.fold.position).toEqual(furled);
+    }
+    expect(manual.pending()).toBe(0);
     controller.hover({ x: 300, y: 175 });
-    let previousX = 200;
+    expect(controller.currentState).toBe(FlipState.read);
+  });
+
+  test("a settling edge is not restarted by the pointer moving on; it lands on schedule", () => {
+    const { controller, manual, last } = setup();
+    controller.hover({ x: 470, y: 30 });
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    expect(last().flip?.fold.position).toEqual({ x: 190, y: REST_NUDGE.down });
+
+    // Off the edge, and the mouse keeps moving while the edge settles.
+    controller.hover({ x: 300, y: 175 });
+    let previousX = 190;
     for (let i = 0; i < 16; i++) {
       manual.advance(16);
       const position = last().flip?.fold.position;
@@ -290,61 +293,76 @@ describe("FlipController", () => {
     expect(controller.currentState).toBe(FlipState.read);
   });
 
-  test("another corner waits for the settling one; a lifted corner settles when the pointer jumps to another", () => {
-    const { controller, manual, last } = setup();
+  test("an edge that is settling waits to land; the other page's edge is left alone meanwhile", () => {
+    const { controller, manual, last } = setup({ startPage: 2 });
     controller.hover({ x: 470, y: 30 });
     for (let i = 0; i < 20; i++) manual.advance(16);
-    // Straight from the top-right corner to the bottom-right one: the top one settles first.
-    controller.hover({ x: 470, y: 320 });
+    // Straight across to the left page's edge: the right one settles first.
+    controller.hover({ x: 30, y: 30 });
     expect(controller.currentState).toBe(FlipState.read);
     manual.advance(16);
-    expect(last().flip?.fold.position.x).toBeGreaterThan(200);
-    // Still settling; the bottom corner does not take over a top-corner fold.
-    controller.hover({ x: 470, y: 320 });
-    expect(controller.currentState).toBe(FlipState.read);
+    expect(last().flip?.fold.position.x).toBeGreaterThan(190);
+    expect(last().flip?.direction).toBe(FlipDirection.forward);
     for (let i = 0; i < 20; i++) manual.advance(16);
     expect(last().flip).toBeNull();
-    // Settled: the next move lifts the bottom corner.
-    controller.hover({ x: 470, y: 320 });
+    // Settled: the next move furls the left page.
+    controller.hover({ x: 30, y: 30 });
     expect(controller.currentState).toBe(FlipState.foldCorner);
-    expect(last().flip?.corner).toBe(FlipCorner.bottom);
+    expect(last().flip?.direction).toBe(FlipDirection.back);
   });
 
-  test("hovering mid-edge lifts the nearer corner, which stays lifted across the midline", () => {
+  test("a drag moves the fold by the pointer's travel: straight in furls the edge, from a corner it folds across", () => {
     const { controller, manual, last } = setup();
-    controller.hover({ x: 470, y: 150 });
-    expect(controller.currentState).toBe(FlipState.foldCorner);
-    expect(last().flip?.corner).toBe(FlipCorner.top);
-    for (let i = 0; i < 20; i++) manual.advance(16);
-    expect(last().flip?.fold.position).toEqual({ x: 200, y: 50 });
-    // Into the bottom half, but not near the bottom corner: nothing changes.
-    controller.hover({ x: 470, y: 200 });
-    manual.advance(16);
-    expect(controller.currentState).toBe(FlipState.foldCorner);
-    expect(last().flip?.corner).toBe(FlipCorner.top);
-    expect(last().flip?.fold.position).toEqual({ x: 200, y: 50 });
-    // At the bottom corner the top one settles, as when jumping between corners.
-    controller.hover({ x: 470, y: 300 });
-    expect(controller.currentState).toBe(FlipState.read);
+    // Mid-edge, straight in: the crease stays parallel to the spine. The corner starts a nudge
+    // inside its rest, where the fold is not degenerate.
+    controller.pointerDown({ x: 470, y: 150 });
+    controller.pointerDrag({ x: 370, y: 150 });
+    expect(controller.currentState).toBe(FlipState.userFold);
+    expect(last().flip?.fold.position).toEqual({
+      x: 250 - REST_NUDGE.in - 100,
+      y: REST_NUDGE.down,
+    });
+    expect(Math.abs(last().flip?.fold.angle ?? 1)).toBeLessThan(0.05);
+    controller.pointerCancel();
+    for (let i = 0; i < 20; i++) manual.advance(16); // the drop lands; a press mid-drop would carry on from it
+    // From the corner, diagonally: the corner is where the pointer took it.
+    controller.pointerDown({ x: 500 - REST_NUDGE.in, y: REST_NUDGE.down });
+    controller.pointerDrag({ x: 400, y: 100 });
+    expect(last().flip?.fold.position).toEqual({ x: 150, y: 100 });
+    expect(Math.abs(last().flip?.fold.angle ?? 0)).toBeGreaterThan(0.5);
+    controller.pointerCancel();
   });
 
-  test("a corner the pointer took over eases back to its lift point when the pointer moves down the edge", () => {
+  test("a press on a furled edge drags on from where the furl got to", () => {
     const { controller, manual, last } = setup();
-    controller.hover({ x: 470, y: 30 });
-    for (let i = 0; i < 20; i++) manual.advance(16);
-    controller.hover({ x: 455, y: 45 });
-    manual.advance(16);
-    expect(last().flip?.fold.position).toEqual({ x: 205, y: 45 });
     controller.hover({ x: 470, y: 150 });
-    expect(controller.currentState).toBe(FlipState.foldCorner);
-    for (let i = 0; i < 20; i++) manual.advance(16);
-    expect(last().flip?.fold.position).toEqual({ x: 200, y: 50 });
-    // Once back at rest, further moves along the edge start nothing.
-    controller.hover({ x: 470, y: 160 });
+    for (let i = 0; i < 8; i++) manual.advance(16);
+    const midway = last().flip?.fold.position;
+    if (midway === undefined) throw new Error("no fold");
+    controller.pointerDown({ x: 470, y: 150 });
+    controller.pointerDrag({ x: 450, y: 150 });
+    expect(controller.currentState).toBe(FlipState.userFold);
+    expect(last().flip?.fold.position.x).toBeCloseTo(midway.x - 20, 6);
+    expect(last().flip?.fold.position.y).toBe(midway.y);
     expect(manual.pending()).toBe(0);
   });
 
-  test("hovering the middle of a page lifts nothing", () => {
+  test("a click on a furled edge flips on from the furl", async () => {
+    const { controller, manual, last } = setup({ flipDuration: 200 });
+    controller.hover({ x: 470, y: 150 });
+    for (let i = 0; i < 20; i++) manual.advance(16);
+    controller.pointerDown({ x: 470, y: 150 });
+    controller.pointerUp({ x: 470, y: 150 });
+    expect(controller.currentState).toBe(FlipState.flipping);
+    expect(last().flip?.fold.position).toEqual({ x: 190, y: REST_NUDGE.down });
+    manual.advance(16);
+    expect(last().flip?.fold.position.x).toBeLessThan(190);
+    for (let i = 0; i < 30; i++) manual.advance(16);
+    await Promise.resolve();
+    expect(controller.page).toBe(2);
+  });
+
+  test("hovering the middle of a page furls nothing", () => {
     const { controller, last } = setup();
     controller.hover({ x: 300, y: 175 });
     expect(controller.currentState).toBe(FlipState.read);

@@ -3,12 +3,14 @@
  * @module @openpageflip/core
  */
 export type { Clock } from "./animation.ts";
+export type { Size } from "./axes.ts";
 export { type Book, type BookEvents, type CreateBookOptions, createBook } from "./book.ts";
 export type { FlipFrame, Frame, ShadowData } from "./controller.ts";
 export type { Emitter, Listener } from "./events.ts";
 export * from "./geometry/index.ts";
 export { type BookRect, computeLayout, type LayoutOptions, type LayoutResult } from "./layout.ts";
 export {
+  Binding,
   type BookOptions,
   ClickMode,
   FlipCorner,

@@ -2,15 +2,19 @@
  * Draws a `Frame` with plain DOM: absolutely positioned page elements, `clip-path` polygons for
  * soft pages, `rotateY` for hard ones, and four gradient elements for shadows. The style strings
  * are the original's, so a frame lands on the same pixels; writes happen only when a frame is
- * handed over, never on a timer.
+ * handed over, never on a timer. A frame is in book space; the `Axes` for the binding turn it to
+ * the screen: a mirror for a right-bound book, a transpose for a top-bound one, with sizes swapped
+ * and every rotation reversed to match.
  */
 
+import { type Axes, axesFor, isVertical, type ScreenSide } from "../axes.ts";
 import type { Frame, ShadowData } from "../controller.ts";
 import { pageToContainer } from "../coords.ts";
 import type { Point, RectPoints } from "../geometry/point.ts";
 import { rotatePoint } from "../geometry/point.ts";
 import type { BookRect } from "../layout.ts";
 import {
+  type Binding,
   FlipDirection,
   Layout,
   Orientation,
@@ -32,8 +36,10 @@ const Z = {
 const CLASS = {
   book: "opf-book",
   page: "opf-page",
-  left: "opf-page--left",
-  right: "opf-page--right",
+  /** The side of the screen a page sits on: `opf-page--left`, `--right`, `--top` or `--bottom`. */
+  side: (side: ScreenSide) => `opf-page--${side}`,
+  /** The binding, on the container: `opf-book--left`, `--right`, `--top` or `--bottom`. */
+  bound: (binding: Binding) => `opf-book--${binding}`,
   flat: "opf-page--flat",
   soft: "opf-page--soft",
   hard: "opf-page--hard",
@@ -68,7 +74,7 @@ function applyPageStyle(el: HTMLElement, style: PageStyle): void {
 
 type SizingOptions = Pick<
   ResolvedOptions,
-  "autoSize" | "size" | "width" | "height" | "minWidth" | "maxWidth" | "layout"
+  "autoSize" | "size" | "width" | "height" | "minWidth" | "maxWidth" | "layout" | "binding"
 >;
 
 type Saved = { readonly cssText: string; readonly className: string };
@@ -87,11 +93,14 @@ export class DomRenderer {
 
   private readonly container: HTMLElement;
   private readonly options: SizingOptions;
+  /** Rebuilt on every frame from the container size the frame carries. */
+  private axes: Axes;
 
   constructor(container: HTMLElement, options: SizingOptions) {
     this.container = container;
     this.options = options;
-    container.classList.add(CLASS.book);
+    this.axes = axesFor(options.binding, { width: 0, height: 0 });
+    container.classList.add(CLASS.book, CLASS.bound(options.binding));
     const shadow = (name: string): HTMLDivElement => {
       const el = document.createElement("div");
       el.className = `${CLASS.shadow} ${CLASS.shadow}--${name}`;
@@ -127,21 +136,31 @@ export class DomRenderer {
 
   /** Aspect ratio and width limits on the container, when the book sizes itself. */
   applyContainerSizing(orientation: Orientation = Orientation.landscape): void {
-    const { autoSize, size, width, height, minWidth, maxWidth, layout } = this.options;
+    const { autoSize, size, width, height, minWidth, maxWidth, layout, binding } = this.options;
     if (!autoSize) return;
-    // Narrowest: one page unless spreads are forced. Widest: two pages unless single is forced.
-    const minAcross = layout === Layout.spread ? 2 : 1;
-    const maxAcross = layout === Layout.single ? 1 : 2;
+    const narrowest = size === SizeMode.fixed ? width : minWidth;
+    const widest = size === SizeMode.fixed ? width : maxWidth;
+    const shown = orientation === Orientation.portrait ? 1 : 2;
     const style = this.container.style;
     style.width = "100%";
-    style.minWidth = `${(size === SizeMode.fixed ? width : minWidth) * minAcross}px`;
-    style.maxWidth = `${(size === SizeMode.fixed ? width : maxWidth) * maxAcross}px`;
-    style.aspectRatio =
-      orientation === Orientation.portrait ? `${width} / ${height}` : `${width * 2} / ${height}`;
+    if (isVertical(binding)) {
+      // Pages stack along the height, so the container is always one page wide.
+      style.minWidth = `${narrowest}px`;
+      style.maxWidth = `${widest}px`;
+      style.aspectRatio = `${width} / ${height * shown}`;
+    } else {
+      // Narrowest: one page unless spreads are forced. Widest: two pages unless single is forced.
+      const minAcross = layout === Layout.spread ? 2 : 1;
+      const maxAcross = layout === Layout.single ? 1 : 2;
+      style.minWidth = `${narrowest * minAcross}px`;
+      style.maxWidth = `${widest * maxAcross}px`;
+      style.aspectRatio = `${width * shown} / ${height}`;
+    }
   }
 
   render(frame: Frame): void {
     const { rect, flip } = frame;
+    this.axes = axesFor(this.options.binding, frame.container);
     const active = new Set<number>();
     for (const index of [frame.left, frame.right, flip?.flipping, flip?.bottom]) {
       if (index !== undefined && index !== null) active.add(index);
@@ -245,8 +264,10 @@ export class DomRenderer {
     el.classList.add(CLASS.page);
     el.classList.toggle(CLASS.hard, page.drawingDensity === PageDensity.hard);
     el.classList.toggle(CLASS.soft, page.drawingDensity === PageDensity.soft);
-    el.classList.toggle(CLASS.left, side === "left");
-    el.classList.toggle(CLASS.right, side === "right");
+    // The side a page sits on as the reader sees it: a right-bound book's "left" page is on the
+    // right, a top-bound book's on top.
+    el.classList.toggle(CLASS.side(this.axes.side("left")), side === "left");
+    el.classList.toggle(CLASS.side(this.axes.side("right")), side === "right");
     return el;
   }
 
@@ -271,18 +292,57 @@ export class DomRenderer {
     this.clone = null;
   }
 
+  /** A page's box on screen. */
+  private pageSize(rect: BookRect): { width: string; height: string } {
+    const size = this.axes.size({ width: rect.pageWidth, height: rect.height });
+    return { width: `${size.width}px`, height: `${size.height}px` };
+  }
+
+  /**
+   * Where an element goes on screen, given its book-space `translate` and transform `origin`
+   * (`translate3d` then `rotate`, as the style strings do) and its book-space `width`. The origin
+   * maps as an element-local point; the translate is where the origin lands in the container,
+   * minus where the origin sits in the element on screen.
+   */
+  private placement(
+    translate: Point,
+    origin: Point,
+    width: number,
+  ): { readonly translate: Point; readonly origin: Point } {
+    const localOrigin = this.axes.local(origin, width);
+    const at = this.axes.toScreen({ x: translate.x + origin.x, y: translate.y + origin.y });
+    return {
+      origin: localOrigin,
+      translate: { x: at.x - localOrigin.x, y: at.y - localOrigin.y },
+    };
+  }
+
+  /** Rotation about the spine, as CSS: about the y axis on screen, or the x axis when stacked. */
+  private spin(degrees: number): string {
+    const turned = this.axes.angle(degrees);
+    return this.axes.vertical ? `rotateX(${turned}deg)` : `rotateY(${turned}deg)`;
+  }
+
+  /** A gradient running along book-space x, as the screen keyword for `linear-gradient`. */
+  private toward(bookSide: "left" | "right"): string {
+    return `to ${this.axes.side(bookSide)}`;
+  }
+
   private drawFlat(index: number, side: Side, rect: BookRect): void {
     const el = this.element(index, side);
     if (el === null) return;
     el.classList.add(CLASS.flat);
-    const left = side === "right" ? rect.left + rect.pageWidth : rect.left;
+    const at = this.placement(
+      { x: side === "right" ? rect.left + rect.pageWidth : rect.left, y: rect.top },
+      { x: 0, y: 0 },
+      rect.pageWidth,
+    ).translate;
     applyPageStyle(el, {
       position: "absolute",
       display: "block",
-      height: `${rect.height}px`,
-      left: `${left}px`,
-      top: `${rect.top}px`,
-      width: `${rect.pageWidth}px`,
+      ...this.pageSize(rect),
+      left: `${at.x}px`,
+      top: `${at.y}px`,
       zIndex: String(Z.flat),
     });
   }
@@ -301,14 +361,18 @@ export class DomRenderer {
     const el = this.element(index, side, asClone);
     if (el === null) return;
     el.classList.remove(CLASS.flat);
-    const at = pageToContainer(position, rect, direction);
+    const at = this.placement(
+      pageToContainer(position, rect, direction),
+      { x: 0, y: 0 },
+      rect.pageWidth,
+    );
     const polygon = area
       .map((p) => {
         const local =
           direction === FlipDirection.back
             ? { x: -p.x + position.x, y: p.y - position.y }
             : { x: p.x - position.x, y: p.y - position.y };
-        const g = rotatePoint(local, { x: 0, y: 0 }, angle);
+        const g = this.axes.local(rotatePoint(local, { x: 0, y: 0 }, angle), rect.pageWidth);
         return `${g.x}px ${g.y}px`;
       })
       .join(", ");
@@ -318,11 +382,10 @@ export class DomRenderer {
       zIndex: String(zIndex),
       left: "0",
       top: "0",
-      width: `${rect.pageWidth}px`,
-      height: `${rect.height}px`,
-      transformOrigin: "0 0",
+      ...this.pageSize(rect),
+      transformOrigin: `${at.origin.x}px ${at.origin.y}px`,
       clipPath: `polygon(${polygon})`,
-      transform: `translate3d(${at.x}px, ${at.y}px, 0) rotate(${angle}rad)`,
+      transform: `translate3d(${at.translate.x}px, ${at.translate.y}px, 0) rotate(${this.axes.angle(angle)}rad)`,
     });
   }
 
@@ -331,21 +394,23 @@ export class DomRenderer {
     if (el === null) return;
     el.classList.remove(CLASS.flat);
     const spine = rect.left + rect.width / 2;
+    // A page turns about its spine edge: the left page's right edge, the right page's left edge.
+    const at = this.placement(
+      { x: side === "left" ? rect.left : spine, y: rect.top },
+      side === "left" ? { x: rect.pageWidth, y: 0 } : { x: 0, y: 0 },
+      rect.pageWidth,
+    );
     applyPageStyle(el, {
       position: "absolute",
       display: "block",
       zIndex: String(zIndex),
       left: "0",
       top: "0",
-      width: `${rect.pageWidth}px`,
-      height: `${rect.height}px`,
+      ...this.pageSize(rect),
       backfaceVisibility: "hidden",
       clipPath: "none",
-      transformOrigin: side === "left" ? `${rect.pageWidth}px 0` : "0 0",
-      transform:
-        side === "left"
-          ? `translate3d(${rect.left}px, ${rect.top}px, 0) rotateY(${angle}deg)`
-          : `translate3d(${spine}px, ${rect.top}px, 0) rotateY(${angle}deg)`,
+      transformOrigin: `${at.origin.x}px ${at.origin.y}px`,
+      transform: `translate3d(${at.translate.x}px, ${at.translate.y}px, 0) ${this.spin(angle)}`,
     });
   }
 
@@ -355,36 +420,48 @@ export class DomRenderer {
     const forward = shadow.direction === FlipDirection.forward;
     const at = pageToContainer(shadow.pos, rect, shadow.direction);
     const angle = shadow.angle + (3 * Math.PI) / 2;
-    const polygon = (points: readonly Point[], translate: number): string =>
-      points
+    // A gradient strip `width` wide and two pages tall in book space, turned about a point 100px
+    // down its `translate` edge, placed so that point sits at `at`, and clipped to `points`.
+    const place = (
+      width: number,
+      translate: number,
+      points: readonly Point[],
+      gradient: string,
+    ): string => {
+      const size = this.axes.size({ width, height: rect.height * 2 });
+      const origin = { x: translate, y: 100 };
+      const clip = points
         .map((p) => {
-          const local = forward
+          const offset = forward
             ? { x: p.x - shadow.pos.x, y: p.y - shadow.pos.y }
             : { x: -p.x + shadow.pos.x, y: p.y - shadow.pos.y };
-          const g = rotatePoint(local, { x: translate, y: 100 }, angle);
+          const g = this.axes.local(rotatePoint(offset, origin, angle), width);
           return `${g.x}px ${g.y}px`;
         })
         .join(", ");
+      const to = this.placement({ x: at.x - origin.x, y: at.y - origin.y }, origin, width);
+      return `display: block; z-index: ${Z.shadow}; width: ${size.width}px; height: ${size.height}px; background: linear-gradient(${gradient}); transform-origin: ${to.origin.x}px ${to.origin.y}px; transform: translate3d(${to.translate.x}px, ${to.translate.y}px, 0) rotate(${this.axes.angle(angle)}rad); clip-path: polygon(${clip});`;
+    };
 
-    const outerTranslate = forward ? 0 : shadow.width;
-    const outerClip = polygon(
+    this.shadows.outer.style.cssText = place(
+      shadow.width,
+      forward ? 0 : shadow.width,
       [
         { x: 0, y: 0 },
         { x: rect.pageWidth, y: 0 },
         { x: rect.pageWidth, y: rect.height },
         { x: 0, y: rect.height },
       ],
-      outerTranslate,
+      `${this.toward(forward ? "right" : "left")}, rgba(0, 0, 0, ${shadow.opacity}), rgba(0, 0, 0, 0)`,
     );
-    this.shadows.outer.style.cssText = `display: block; z-index: ${Z.shadow}; width: ${shadow.width}px; height: ${rect.height * 2}px; background: linear-gradient(${forward ? "to right" : "to left"}, rgba(0, 0, 0, ${shadow.opacity}), rgba(0, 0, 0, 0)); transform-origin: ${outerTranslate}px 100px; transform: translate3d(${at.x - outerTranslate}px, ${at.y - 100}px, 0) rotate(${angle}rad); clip-path: polygon(${outerClip});`;
 
     const innerWidth = (shadow.width * 3) / 4;
-    const innerTranslate = forward ? innerWidth : 0;
-    const innerClip = polygon(
+    this.shadows.inner.style.cssText = place(
+      innerWidth,
+      forward ? innerWidth : 0,
       [pageRect.topLeft, pageRect.topRight, pageRect.bottomRight, pageRect.bottomLeft],
-      innerTranslate,
+      `${this.toward(forward ? "left" : "right")}, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0.05) 15%, rgba(0, 0, 0, ${shadow.opacity}) 35%, rgba(0, 0, 0, 0) 100%`,
     );
-    this.shadows.inner.style.cssText = `display: block; z-index: ${Z.shadow}; width: ${innerWidth}px; height: ${rect.height * 2}px; background: linear-gradient(${forward ? "to left" : "to right"}, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0.05) 15%, rgba(0, 0, 0, ${shadow.opacity}) 35%, rgba(0, 0, 0, 0) 100%); transform-origin: ${innerTranslate}px 100px; transform: translate3d(${at.x - innerTranslate}px, ${at.y - 100}px, 0) rotate(${angle}rad); clip-path: polygon(${innerClip});`;
   }
 
   /**
@@ -403,12 +480,14 @@ export class DomRenderer {
     const pastSpine = shadow.progress > 100;
     const showInner = landingHasPage || pastSpine;
     const showOuter = landingHasPage || !pastSpine;
-    const common = `display: block; width: ${size}px; height: ${rect.height}px; left: ${spine}px; top: ${rect.top}px; transform-origin: 0 0;`;
+    const box = this.axes.size({ width: size, height: rect.height });
+    const at = this.placement({ x: spine, y: rect.top }, { x: 0, y: 0 }, size);
+    const common = `display: block; width: ${box.width}px; height: ${box.height}px; left: ${at.translate.x}px; top: ${at.translate.y}px; transform-origin: ${at.origin.x}px ${at.origin.y}px;`;
     this.shadows.hardInner.style.cssText = showInner
-      ? `${common} z-index: ${Z.hardInnerShadow}; background: linear-gradient(to right, rgba(0, 0, 0, ${(shadow.opacity * progress) / 100}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? "" : " rotateY(180deg)"};`
+      ? `${common} z-index: ${Z.hardInnerShadow}; background: linear-gradient(${this.toward("right")}, rgba(0, 0, 0, ${(shadow.opacity * progress) / 100}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? "" : ` ${this.spin(180)}`};`
       : "display: none";
     this.shadows.hardOuter.style.cssText = showOuter
-      ? `${common} z-index: ${Z.hardShadow}; background: linear-gradient(to left, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? " rotateY(180deg)" : ""};`
+      ? `${common} z-index: ${Z.hardShadow}; background: linear-gradient(${this.toward("left")}, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? ` ${this.spin(180)}` : ""};`
       : "display: none";
   }
 
@@ -442,7 +521,7 @@ export class DomRenderer {
     for (const page of this.pages) this.restore(page.element);
     this.pages = [];
     for (const el of Object.values(this.shadows)) el.remove();
-    this.container.classList.remove(CLASS.book);
+    this.container.classList.remove(CLASS.book, CLASS.bound(this.options.binding));
     const style = this.container.style;
     style.width = "";
     style.minWidth = "";

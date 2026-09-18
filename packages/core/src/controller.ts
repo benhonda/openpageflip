@@ -1,11 +1,13 @@
 /**
- * The headless heart of the book: which spread is open, what a pointer is doing to a corner,
- * and where the flip animation is. It knows nothing about the DOM; it hands `Frame`s to a
- * renderer. The behaviour (hover fold, drop thresholds, animation paths) is the original's, so
- * the book feels the same. One thing is ours: hover, click and drag all act on the same zone (see
- * `isHandle`), so a corner lifts only where a press would turn the page.
+ * The headless heart of the book: which spread is open, what a pointer is doing to a page, and
+ * where the flip animation is. It knows nothing about the DOM; it hands `Frame`s to a renderer.
+ * The behaviour (drop thresholds, animation paths) is the original's, so the book feels the
+ * same. Two things are ours: hover, click and drag all act on the same zone (see `isHandle`), so
+ * the cue never promises what a press would not do; and the cue is the whole edge furling, which
+ * a drag then carries on from, moving the fold by the pointer's travel.
  */
 import { type Clock, startTween, type Tween } from "./animation.ts";
+import type { Size } from "./axes.ts";
 import { containerToBook, containerToPage } from "./coords.ts";
 import { computeFold, type Fold } from "./geometry/fold.ts";
 import { distance, type Point } from "./geometry/point.ts";
@@ -53,6 +55,8 @@ export type FlipFrame = {
 /** Everything a renderer needs to draw one moment of the book. */
 export type Frame = {
   readonly rect: BookRect;
+  /** The container the rect sits in, as measured on screen. */
+  readonly container: Size;
   readonly orientation: Orientation;
   readonly left: number | null;
   readonly right: number | null;
@@ -80,13 +84,22 @@ type Session = {
 
 /** Pointer travel before a press counts as a drag rather than a click. */
 const DRAG_THRESHOLD = 5;
-/** How far a hovered corner lifts. */
-const HOVER_LIFT = 50;
+/** How deep a hovered edge furls: the crease sits this far in from the edge. */
+const FURL = 30;
+/**
+ * Where a corner sits when a fold starts from rest: `in` from the edge and `down` it. Exactly at
+ * rest the fold is degenerate (the crease would lie on the edge), and the kernel treats anything
+ * within a pixel of it as rest, so `in` is that pixel. `down` gives a fold reached by pulling
+ * straight in a whisker of tilt, under three pixels of drift across a page at furl depth.
+ * Exported so the parity suite can start its drags from the same point.
+ */
+export const REST_NUDGE = { in: 1, down: 0.5 } as const;
 /** Animation paths longer than this take the full `flipDuration`; shorter ones scale down. */
 const FULL_FLIP_LENGTH = 1000;
 /**
  * No animation is shorter than this fraction of `flipDuration`, however short its path. Scaled
- * alone, a hovered corner dropping 50px would take 50ms: a snap, not a settle. The original snapped.
+ * alone, a furled edge settling back 60px would take 60ms: a snap, not a settle. The original
+ * snapped its hovered corner the same way.
  */
 const SHORTEST_FLIP = 0.25;
 
@@ -97,6 +110,7 @@ export class FlipController {
   private currentPage = 0;
   private orientation: Orientation;
   private rect: BookRect;
+  private container: Size;
   private left: number | null = null;
   private right: number | null = null;
 
@@ -108,6 +122,8 @@ export class FlipController {
 
   private pressStart: Point | null = null;
   private dragged = false;
+  /** Where the fold was when a drag took hold of it, in page space; the drag moves it from here. */
+  private dragBase: Point | null = null;
 
   private readonly options: ResolvedOptions;
   private readonly clock: Clock;
@@ -126,6 +142,7 @@ export class FlipController {
     this.pages = pages;
     this.orientation = layout.orientation;
     this.rect = layout.rect;
+    this.container = layout.container;
     this.rebuildSpreads();
   }
 
@@ -159,6 +176,7 @@ export class FlipController {
     const resized =
       layout.rect.pageWidth !== this.rect.pageWidth || layout.rect.height !== this.rect.height;
     this.rect = layout.rect;
+    this.container = layout.container;
     const orientationChanged = layout.orientation !== this.orientation;
     // A fold is computed for one page size; when that changes mid-flip the fold is dropped.
     if (resized && !orientationChanged) this.endSession();
@@ -273,7 +291,10 @@ export class FlipController {
 
   /** Full animated flip starting at a container point, as a click would. */
   private flipFrom(containerPos: Point): Promise<boolean> {
+    // A furl under the pointer lands, and the flip carries on from it. A running flip lands too,
+    // which ends its session, so the new flip starts from the settled book.
     if (this.session !== null) this.tween?.finish();
+    const held = this.session;
     const session = this.start(containerPos);
     if (session === null) return Promise.resolve(false);
 
@@ -282,7 +303,11 @@ export class FlipController {
     const margin = pageHeight / 10;
     const yStart = session.corner === FlipCorner.bottom ? pageHeight - margin : margin;
     const yDest = session.corner === FlipCorner.bottom ? pageHeight : 0;
-    const from = { x: pageWidth - margin, y: yStart };
+    const heldFold =
+      held !== null && held.direction === session.direction && held.corner === session.corner
+        ? held.fold
+        : null;
+    const from = heldFold?.position ?? { x: pageWidth - margin, y: yStart };
     this.applyFold(from);
     return this.animateTo(from, { x: -pageWidth, y: yDest }, true, true);
   }
@@ -346,29 +371,12 @@ export class FlipController {
     if (current !== null) {
       const bookPos = containerToBook(containerPos, this.rect);
       const held = this.isHandle(containerPos) && this.directionAt(bookPos) === current.direction;
-      const nearCorner = this.isNearCorner(containerPos);
-      if (held && nearCorner && this.cornerAt(bookPos) === current.corner) {
-        // Close to the lifted corner the pointer takes over from the lift (or a settle it came
-        // back into), so the two never fight over the fold.
-        this.stopTween();
-        this.setState(FlipState.foldCorner);
-        this.applyFold(containerToPage(containerPos, this.rect, current.direction));
-      } else if (held && !nearCorner) {
-        // Along the edge but away from the corner: the corner stays lifted instead of flapping
-        // with every move across the page's midline. One the pointer had taken over eases back
-        // to its lift point.
-        const lift = this.liftPoint(current);
-        if (
-          this.state === FlipState.foldCorner &&
-          this.tween === null &&
-          current.fold !== null &&
-          distance(current.fold.position, lift) > 0.5
-        ) {
-          void this.animateTo(current.fold.position, lift, false, false);
-        }
-      } else if (this.state === FlipState.foldCorner) {
-        // Off the page (or onto another corner): let it settle. A settle already running is left
-        // alone; restarting it on every move made the corner stutter and never land.
+      // Along the edge the furl holds, wherever the pointer is on it, and one that is settling
+      // keeps settling: it lands, and the next move furls the edge again.
+      if (held) return;
+      if (this.state === FlipState.foldCorner) {
+        // Off the edge: let it settle. A settle already running is left alone; restarting it on
+        // every move made the edge stutter and never land.
         this.setState(FlipState.read);
         this.stopTween();
         void this.release();
@@ -380,23 +388,26 @@ export class FlipController {
     const session = this.start(containerPos);
     if (session === null) return;
     this.setState(FlipState.foldCorner);
-    const from = {
-      x: session.pageWidth - 1,
-      y: session.corner === FlipCorner.bottom ? session.pageHeight - 1 : 1,
-    };
+    const from = this.restPoint(session);
     this.applyFold(from);
-    void this.animateTo(from, this.liftPoint(session), false, false);
+    void this.animateTo(from, this.furlPoint(session), false, false);
   }
 
-  /** Where a hovered corner rests once lifted, in page space. */
-  private liftPoint(session: Session): Point {
+  /** The corner at rest, nudged in and down by `REST_NUDGE` so the fold is not degenerate. */
+  private restPoint(session: Session): Point {
+    const { in: x, down: y } = REST_NUDGE;
     return {
-      x: session.pageWidth - HOVER_LIFT,
-      y: session.corner === FlipCorner.bottom ? session.pageHeight - HOVER_LIFT : HOVER_LIFT,
+      x: session.pageWidth - x,
+      y: session.corner === FlipCorner.bottom ? session.pageHeight - y : y,
     };
   }
 
-  /** The mouse left the book: drop any hovered corner. */
+  /** The edge furled: the corner pulled straight in, so the crease runs parallel to the spine. */
+  private furlPoint(session: Session): Point {
+    return { x: session.pageWidth - 2 * FURL, y: this.restPoint(session).y };
+  }
+
+  /** The mouse left the book: let a furled edge settle. */
   hoverEnd(): void {
     if (this.state !== FlipState.foldCorner) return;
     this.setState(FlipState.read);
@@ -414,28 +425,53 @@ export class FlipController {
     if (this.state === FlipState.flipping) this.tween?.finish();
     this.pressStart = containerPos;
     this.dragged = false;
+    this.dragBase = null;
     return this.isPressable(containerPos);
   }
 
-  /** A pressed pointer moved. Starts a drag once it travels past the click threshold. */
+  /**
+   * A pressed pointer moved. Starts a drag once it travels past the click threshold. The fold
+   * moves by the pointer's travel from where it was when the drag took hold: pulled straight in
+   * from anywhere on the edge, the whole edge furls; pulled from a corner, it folds across.
+   */
   pointerDrag(containerPos: Point): void {
     if (this.pressStart === null) return;
     if (!this.dragged && distance(this.pressStart, containerPos) <= DRAG_THRESHOLD) return;
     // A press that travelled is a drag even when it cannot fold: releasing it must not click.
     this.dragged = true;
     if (!this.options.drag || !this.isHandle(this.pressStart)) return;
-    // Direction and corner come from where the press started, so a fast drag across the spine
-    // cannot flip the wrong way. (The original decided from the first move instead.)
-    const session = this.session ?? this.start(this.pressStart);
+    if (this.dragBase === null) {
+      // Direction and corner come from where the press started, so a fast drag across the spine
+      // cannot flip the wrong way. (The original decided from the first move instead.) A furl
+      // under the press, lifting or settling, hands over how far in it got.
+      const held = this.session;
+      const heldFold = held?.fold ?? null;
+      const session = this.start(this.pressStart);
+      if (session === null) return;
+      const rest = this.restPoint(session);
+      this.dragBase =
+        held === null || heldFold === null || held.direction !== session.direction
+          ? rest
+          : held.corner === session.corner
+            ? heldFold.position
+            : { x: heldFold.position.x, y: rest.y };
+      this.setState(FlipState.userFold);
+    }
+    const session = this.session;
     if (session === null) return;
-    this.setState(FlipState.userFold);
-    this.applyFold(containerToPage(containerPos, this.rect, session.direction));
+    const from = containerToPage(this.pressStart, this.rect, session.direction);
+    const to = containerToPage(containerPos, this.rect, session.direction);
+    this.applyFold({
+      x: this.dragBase.x + to.x - from.x,
+      y: this.dragBase.y + to.y - from.y,
+    });
   }
 
   /** The pointer was released. A press without a drag is a click. */
   pointerUp(containerPos: Point): void {
     if (this.pressStart === null) return;
     this.pressStart = null;
+    this.dragBase = null;
     if (this.dragged) {
       void this.release();
       return;
@@ -443,10 +479,11 @@ export class FlipController {
     this.click(containerPos);
   }
 
-  /** The browser took the pointer (a scroll, for instance): drop the corner, no click. */
+  /** The browser took the pointer (a scroll, for instance): drop the fold, no click. */
   pointerCancel(): void {
     if (this.pressStart === null) return;
     this.pressStart = null;
+    this.dragBase = null;
     if (this.dragged) void this.release();
   }
 
@@ -608,18 +645,11 @@ export class FlipController {
     return this.isOnPage(p) && (this.options.click === ClickMode.anywhere || this.isOnEdge(p));
   }
 
-  /** A handle where a press can actually do something: click, drag, or both. Hover lifts nothing elsewhere. */
+  /** A handle where a press can actually do something: click, drag, or both. Hover furls nothing elsewhere. */
   private isPressable(containerPos: Point): boolean {
     return (
       this.isHandle(containerPos) && (this.options.drag || this.options.click !== ClickMode.off)
     );
-  }
-
-  /** Whether a point is close enough to a corner for that corner to follow the pointer. */
-  private isNearCorner(containerPos: Point): boolean {
-    const p = containerToBook(containerPos, this.rect);
-    const reach = this.reach;
-    return this.isOnPage(p) && this.isOnEdge(p) && (p.y < reach || p.y > this.rect.height - reach);
   }
 
   private setState(state: FlipState): void {
@@ -634,6 +664,7 @@ export class FlipController {
     const session = this.session;
     return {
       rect: this.rect,
+      container: this.container,
       orientation: this.orientation,
       left: this.left,
       right: this.right,

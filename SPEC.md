@@ -1,6 +1,6 @@
 # OpenPageFlip
 
-> **Status: DRAFT** · 2026-09-01 · provisional
+> **Status: DRAFT** · 2026-09-18 · provisional
 > Records our thinking as of the date above — NOT a contract. Before acting on anything
 > here, confirm it still matches the current goal. When it conflicts with where we're
 > actually headed now, the current goal wins: flag the conflict, don't silently obey.
@@ -34,12 +34,41 @@ closed by design.
 - `[settled]` 2026-09-10: **Hover, click and drag share one zone, and it is the page's outer
   edge.** The original lifted a corner on hover but clicked and dragged from anywhere, so the cue
   and the action disagreed. `click: "edges"` (the default) makes the strip along each visible
-  page's outer edge the only place a corner lifts, a click turns or a drag starts; the nearer
-  corner lifts and stays lifted until the pointer leaves the edge or reaches the other corner.
-  `"anywhere"` keeps the original's tap-anywhere, with the hover cue widened to the page to
-  match. The middle of a page belongs to the browser: text selects, links click, and a swipe is
-  a touch/pen gesture so a quick mouse selection never turns a page. A deliberate departure
-  from the original's default, recorded in the migration guide.
+  page's outer edge the only place the cue shows, a click turns or a drag starts. `"anywhere"`
+  keeps the original's tap-anywhere, with the hover cue widened to the page to match. The middle
+  of a page belongs to the browser: text selects, links click, and a swipe is a touch/pen gesture
+  so a quick mouse selection never turns a page. A deliberate departure from the original's
+  default, recorded in the migration guide.
+- `[settled]` 2026-09-18: **The hover cue is the whole edge furling, and a drag carries on from
+  it.** Hovering the edge strip furls the edge: the corner is pulled straight in (`FURL` px, with
+  a whisker of tilt so the fold is not degenerate), so the crease runs parallel to the spine and
+  the same cue reads on every binding (the bottom edge of a notepad). It holds anywhere along the
+  edge and settles when the pointer leaves. It replaced the nearer-corner lift, which was one
+  corner's cue for a whole-edge zone, and the pointer-follow near a corner that came with it.
+  Drags move the fold by the pointer's travel from where it took hold (the furl's depth when
+  there is one), so pulling straight in from anywhere on the edge deepens the furl and pulling
+  from a corner folds across; the original moved the corner to wherever the pointer was, which
+  snapped a mid-edge press into a diagonal fold. A click on a furled edge flips on from the furl.
+  The parity suite drives our drags by travel and no longer compares hover, both listed under
+  deliberate differences. Option `hoverCorners` became `hover`.
+- `[settled]` 2026-09-18: **Every binding is the same book seen from another side.**
+  `binding: "left" | "right" | "top" | "bottom"`. `right` is a right-to-left book (a manga: the
+  spine on the right, the cover alone on the left, a swipe to the right reads on), which is the
+  left-bound book mirrored; `top` is a notepad or wall calendar, the book transposed; `bottom` is
+  both. The fold kernel and the controller never learn the binding: `packages/core/src/axes.ts`
+  maps points, sizes and rotations at the three boundaries, layout, input and the renderer, so
+  there is one geometry and one controller, and `packages/core/test/binding.test.ts` holds each
+  bound book to its left-bound twin pixel for pixel through the same mirror or transpose. RTL is
+  a binding, not a `direction` option, because that is what it physically is and it falls out of
+  the same map; pages stay in reading order and the binding decides the side. `layout: "auto"`
+  means "a spread when two pages fit across the spine": for a left- or right-bound book that is
+  the original's width rule; a top- or bottom-bound book that sizes itself is always two pages
+  tall, so it is a spread unless `layout` says `single`. **The library does not switch binding at
+  a breakpoint.** Whether a book becomes a notepad on a phone, and at what width, is the host's
+  call; options are rebuilt on change, and `apps/docs/src/examples/react/Responsive.tsx` shows
+  the media-query switch. Rejected: an automatic switch (an opinion, like the original's portrait
+  switch that `layout` exists to turn off) and a binding-specific set of `FlipCorner` names
+  (`top`/`bottom` are documented as the left and right corners of a vertically bound page).
 
 ### Docs (settled 2026-09-01)
 
@@ -72,8 +101,8 @@ closed by design.
 - `[settled]` **The migration guide is data, not prose**: `apps/docs/src/migration/index.ts` maps
   every key of the vendored `page-flip@2.0.7` / `react-pageflip@2.0.3` API (`upstream.ts`) to
   `keyof BookOptions`, `keyof Book`, `keyof BookEvents` and `keyof FlipBookProps`, so the type
-  checker fails the build when either side moves. `start/migrate.mdx` renders it. Options still
-  on the backlog (`direction`, keyboard) get rows as they land.
+  checker fails the build when either side moves. `start/migrate.mdx` renders it. Keyboard gets
+  rows when it lands.
 
 ## Toolchain (verified 2026-09-01)
 
@@ -111,7 +140,8 @@ a test and a docs page.
 
 - Correct, shipped TypeScript types with every option optional.
 - `layout: 'auto' | 'single' | 'spread'` (StPageFlip #12, react #47, #56).
-- `direction: 'ltr' | 'rtl'` (StPageFlip #13, #27, #68; react #22, #26).
+- Right-to-left (StPageFlip #13, #27, #68; react #22, #26). Landed 2026-09-18 as
+  `binding: "right"`; see Decisions.
 - Pointer Events, `touch-action`, passive listeners; no scroll jump on flip (react #57, #58).
 - Reactive options and dynamic pages without remounting (react #24, #40, #2).
 - SSR-safe: nothing touches `window` at import (react #20, #46).
@@ -120,7 +150,9 @@ a test and a docs page.
 - `destroy()` stops the render loop and restores the DOM (StPageFlip #71).
 - Keyboard navigation, ARIA, `prefers-reduced-motion`.
 - `[open]` Pinch zoom (StPageFlip #15). Probably post-1.0; decide when the renderer exists.
-- `[open]` Soft cover, top/bottom binding (StPageFlip #20, PR #46). Post-1.0 unless cheap.
+- Top and bottom binding (StPageFlip #20, PR #46). Landed 2026-09-18 as `binding: "top"` and
+  `"bottom"`; see Decisions.
+- `[open]` Soft cover (StPageFlip #20). Post-1.0 unless cheap.
 
 ## Phases, hardest first
 
@@ -135,9 +167,10 @@ Each phase is anchored to the commit that landed it; the tests named are the pro
    `packages/core/test/visual.parity.test.ts` against the published `page-flip@2.0.7`.
 3. **React wrapper.** Landed in `f0701b8`. `packages/react/src/FlipBook.tsx`; StrictMode and
    Node SSR covered by `packages/react/test/`.
-4. **Backlog features** from the list above. Not started as of 2026-09-01. Suggested order:
-   right-to-left first (it touches layout, pagination and renderer together), then keyboard and
-   ARIA, then lazy images and the remaining click/drag option tests.
+4. **Backlog features** from the list above. Landed so far: `click: "edges"` (`9056442`), the
+   four bindings including right-to-left (`binding` option, `packages/core/test/binding.test.ts`)
+   and the hover furl. Suggested order for the rest: keyboard and ARIA, then lazy images and the
+   remaining click/drag option tests.
 5. **Docs, migration guide, 1.0.** Not started. Before calling the packages a replacement:
    `[open]` add Firefox and WebKit to the Vitest browser instances (everything so far is verified
    in Chromium only; the original's Safari workaround was dropped on research, not a test);
@@ -158,6 +191,12 @@ this library. These are the places where it was wrong and we did not copy it:
 - A settling corner is left to land. The original restarted the drop on every mouse move, which
   its 50ms drop hid; over a quarter second it stutters and never lands while the mouse moves.
 - Drag direction and corner come from where the press started, not from the first move.
+- A drag moves the fold by the pointer's travel from where it took hold, so a press in the middle
+  of the edge pulled straight in furls the whole edge. The original put the corner wherever the
+  pointer was, which snapped that press into a diagonal fold. The parity suite drives our drags
+  by travel so the corner still lands where the original's does.
+- Hovering an edge furls the whole edge, and stays furled anywhere along it. The original lifted
+  the nearer corner and let it follow the pointer. Hover is not compared by the parity suite.
 - `flipPrev` aims at the book's left edge, not the container's (StPageFlip #29 / PR #30).
 - Hard pages and hard shadows are placed from the book rect, so they are right when the book is
   not flush with its container's top-left.
@@ -175,6 +214,13 @@ this library. These are the places where it was wrong and we did not copy it:
   because it changes the look every portrait user knows.
 
 ## Open questions
+
+- `[open]` 2026-09-18: in portrait, the spine-side edge turns back, but its cue is invisible: the
+  page that turns back is the hidden one to the left of the visible page, and a furl (or the
+  original's corner lift) moves its far corner, which is off the stage. A press and drag there
+  works, so nothing is broken, but the edge shows no sign it can be taken hold of. Worth a cue
+  drawn on the visible page's spine edge, or the back flip's furl mapped to it. Another agent has
+  a scratch test probing this (`packages/core/test/zz-scratch.test.ts` at the time of writing).
 
 - `[settled]` 2026-09-01: the React wrapper owns every page element. Each child of `FlipBook`
   renders inside a page `div` the wrapper controls; `<Page density style className>` is a

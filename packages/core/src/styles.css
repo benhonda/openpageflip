@@ -14,6 +14,12 @@
   touch-action: pan-y;
 }
 
+/* A top- or bottom-bound book turns on vertical drags, so those are the book's and horizontal ones scroll. */
+.opf-book--top,
+.opf-book--bottom {
+  touch-action: pan-x;
+}
+
 /* Box sizing is left to the page's own CSS: a bordered page grows past its nominal size, as in the original. */
 .opf-page {
   display: none;

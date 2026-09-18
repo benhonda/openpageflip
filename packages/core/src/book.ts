@@ -31,6 +31,7 @@ export type Book = {
   readonly pageCount: number;
   readonly orientation: Orientation;
   readonly state: FlipState;
+  /** In book space: container pixels for a left-bound book, mirrored or transposed for the others. */
   readonly rect: BookRect;
 
   on: Emitter<BookEvents>["on"];
@@ -80,8 +81,9 @@ export function createBook(container: HTMLElement, userOptions: CreateBookOption
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
   const measure = (): LayoutResult => {
-    // Orientation depends on width only, and the container's height follows orientation when it
-    // sizes itself, so settle the aspect ratio before measuring the height.
+    // The container's height follows the orientation when it sizes itself, so settle the aspect
+    // ratio before measuring the height. Two passes agree: a left- or right-bound book decides by
+    // width alone, and a top- or bottom-bound one that sizes itself is always two pages tall.
     const width = container.clientWidth;
     const { orientation } = computeLayout(width, container.clientHeight, options);
     renderer.applyContainerSizing(orientation);

@@ -3,11 +3,18 @@
  * `isolatedModules`, `erasableSyntaxOnly`, and consumers who only speak string literals.
  */
 
-/** How many pages are visible at once. `auto` picks by container width. */
+/**
+ * How many pages are visible at once. `auto` shows a spread when two pages fit across the
+ * container (side by side, or one above the other for a top-bound book), else one page.
+ */
 export const Layout = { auto: "auto", single: "single", spread: "spread" } as const;
 export type Layout = (typeof Layout)[keyof typeof Layout];
 
-/** Which corner a programmatic flip lifts. */
+/**
+ * Which corner a programmatic flip lifts. Named for a left- or right-bound book; with a top or
+ * bottom binding the turning corners are along the outer edge, and `top` is the left one,
+ * `bottom` the right.
+ */
 export const FlipCorner = { top: "top", bottom: "bottom" } as const;
 export type FlipCorner = (typeof FlipCorner)[keyof typeof FlipCorner];
 
@@ -19,6 +26,16 @@ export type PageDensity = (typeof PageDensity)[keyof typeof PageDensity];
 export const FlipDirection = { forward: "forward", back: "back" } as const;
 export type FlipDirection = (typeof FlipDirection)[keyof typeof FlipDirection];
 
+/**
+ * Where the spine is. `left` is a book read left to right. `right` is the same book read right
+ * to left (a manga): the cover sits on the left, pages turn from the left edge, and a swipe to
+ * the right reads on. `top` is a notepad or a wall calendar: pages lift from the bottom edge and
+ * turn up. `bottom` is a top-bound book upside down: pages lift from the top edge and turn down,
+ * like a flip chart. One geometry, seen from four sides.
+ */
+export const Binding = { left: "left", right: "right", top: "top", bottom: "bottom" } as const;
+export type Binding = (typeof Binding)[keyof typeof Binding];
+
 /** What the book is showing: one page (`portrait`) or a two-page spread (`landscape`). */
 export const Orientation = { portrait: "portrait", landscape: "landscape" } as const;
 export type Orientation = (typeof Orientation)[keyof typeof Orientation];
@@ -27,7 +44,7 @@ export type Orientation = (typeof Orientation)[keyof typeof Orientation];
 export const FlipState = {
   /** Nothing in motion. */
   read: "read",
-  /** A corner is lifted because the pointer hovers over it. */
+  /** The edge under the pointer is furled, because the pointer hovers where a page can be taken hold of. */
   foldCorner: "fold_corner",
   /** The user is dragging a corner. */
   userFold: "user_fold",
@@ -66,12 +83,14 @@ export type BookOptions = {
   readonly height: number;
   /** @default "fixed" */
   readonly size?: SizeMode;
-  /** Narrowest single page in `stretch` mode; below twice this the book goes portrait. @default 100 */
+  /** Narrowest single page in `stretch` mode. A container narrower than two of these across the spine goes portrait. @default 100 */
   readonly minWidth?: number;
   /** Widest single page in `stretch` mode. @default 2000 */
   readonly maxWidth?: number;
   /** @default "auto" */
   readonly layout?: Layout;
+  /** @default "left" */
+  readonly binding?: Binding;
   /** Show the first and last pages alone, as hard covers. @default false */
   readonly cover?: boolean;
   /** Zero-based page to open on. @default 0 */
@@ -88,14 +107,14 @@ export type BookOptions = {
   readonly autoSize?: boolean;
   /** @default "edges" */
   readonly click?: ClickMode;
-  /** Let the pointer drag a corner. @default true */
+  /** Let the pointer drag a page's edge. The fold follows the pointer's travel: pulled straight in it furls the whole edge, pulled from a corner it folds across. @default true */
   readonly drag?: boolean;
-  /** Turn the page on a quick horizontal touch or pen swipe, from anywhere on it. @default true */
+  /** Turn the page on a quick touch or pen swipe across the pages (horizontal for a left- or right-bound book, vertical otherwise), from anywhere on it. @default true */
   readonly swipe?: boolean;
   /** Minimum swipe travel in CSS pixels. @default 30 */
   readonly swipeDistance?: number;
-  /** Lift the nearer corner when the mouse hovers where a page can be taken hold of. @default true */
-  readonly hoverCorners?: boolean;
+  /** Furl the edge when the mouse hovers where a page can be taken hold of, to show it can be. @default true */
+  readonly hover?: boolean;
   /**
    * Pointer events starting on an element matching this selector never start a flip.
    * `false` turns this off.
@@ -113,6 +132,7 @@ const DEFAULTS: Omit<ResolvedOptions, "width" | "height"> = {
   minWidth: 100,
   maxWidth: 2000,
   layout: Layout.auto,
+  binding: Binding.left,
   cover: false,
   startPage: 0,
   flipDuration: 1000,
@@ -124,7 +144,7 @@ const DEFAULTS: Omit<ResolvedOptions, "width" | "height"> = {
   drag: true,
   swipe: true,
   swipeDistance: 30,
-  hoverCorners: true,
+  hover: true,
   ignoreDragOn: "a, button, input, textarea, select, [data-opf-no-flip]",
 };
 
@@ -159,6 +179,8 @@ export function resolveOptions(user: BookOptions): ResolvedOptions {
     throw new TypeError(`@openpageflip/core: unknown "size" ${String(options.size)}`);
   if (!isOneOf(Layout, options.layout))
     throw new TypeError(`@openpageflip/core: unknown "layout" ${String(options.layout)}`);
+  if (!isOneOf(Binding, options.binding))
+    throw new TypeError(`@openpageflip/core: unknown "binding" ${String(options.binding)}`);
   if (!isOneOf(ClickMode, options.click))
     throw new TypeError(`@openpageflip/core: unknown "click" ${String(options.click)}`);
   if (!(options.shadowOpacity >= 0 && options.shadowOpacity <= 1)) {

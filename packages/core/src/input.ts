@@ -1,7 +1,11 @@
 /**
  * Pointer Events to controller calls. One code path for mouse, touch and pen; the container's
- * `touch-action` decides what the browser keeps (vertical scrolling) and what reaches us.
+ * `touch-action` decides what the browser keeps (scrolling along the spine) and what reaches us.
+ * Positions are turned into book space here, so the controller never learns the binding: a swipe
+ * "across the pages" is horizontal on a book and vertical on a notepad by the same test, and a
+ * swipe to the right reads on in a right-bound book.
  */
+import { axesFor } from "./axes.ts";
 import type { FlipController } from "./controller.ts";
 import type { Point } from "./geometry/point.ts";
 import { FlipCorner, FlipDirection, type ResolvedOptions } from "./options.ts";
@@ -14,13 +18,17 @@ type Press = { readonly id: number; readonly start: Point; readonly startedAt: n
 export function attachInput(
   container: HTMLElement,
   controller: FlipController,
-  options: Pick<ResolvedOptions, "swipe" | "swipeDistance" | "hoverCorners" | "ignoreDragOn">,
+  options: Pick<ResolvedOptions, "swipe" | "swipeDistance" | "hover" | "ignoreDragOn" | "binding">,
 ): () => void {
   let press: Press | null = null;
 
+  /** The pointer's position in book space. */
   const local = (event: PointerEvent): Point => {
     const bounds = container.getBoundingClientRect();
-    return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    return axesFor(options.binding, bounds).toBook({
+      x: event.clientX - bounds.left,
+      y: event.clientY - bounds.top,
+    });
   };
 
   const onDown = (event: PointerEvent): void => {
@@ -50,7 +58,7 @@ export function attachInput(
       if (event.pointerId === press.id) controller.pointerDrag(local(event));
       return;
     }
-    if (event.pointerType === "mouse" && options.hoverCorners) controller.hover(local(event));
+    if (event.pointerType === "mouse" && options.hover) controller.hover(local(event));
   };
 
   const onUp = (event: PointerEvent): void => {
@@ -61,7 +69,8 @@ export function attachInput(
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const quick = event.timeStamp - startedAt < SWIPE_TIMEOUT;
-    // A swipe is a finger or pen gesture. A quick mouse drag is selecting text or dragging a corner.
+    // A swipe is a finger or pen gesture across the pages (book-space x). A quick mouse drag is
+    // selecting text or dragging a corner.
     if (
       options.swipe &&
       event.pointerType !== "mouse" &&

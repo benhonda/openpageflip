@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test } from "vitest";
+import { REST_NUDGE } from "../src/controller.ts";
+import { pageToContainer } from "../src/coords.ts";
+import { FlipDirection, Orientation } from "../src/options.ts";
 import {
   expectVisualParity,
   frames,
@@ -34,7 +37,7 @@ afterEach(() => {
 /** Drive the original through its API and ours through pointer events. */
 type Drive = {
   original: (book: OriginalSetup["book"]) => void;
-  ours: (container: HTMLElement) => void;
+  ours: (setup: OursSetup) => void;
 };
 
 type Scenario = {
@@ -44,10 +47,7 @@ type Scenario = {
   hard?: number[];
   startPage?: number;
   /** Drive the original through its API and ours through pointer events. */
-  drive?: {
-    original: (book: OriginalSetup["book"]) => void;
-    ours: (container: HTMLElement) => void;
-  };
+  drive?: Drive;
   settle?: number;
   tolerance?: number;
   /** Stage areas left out of the comparison, each a deliberate difference listed in SPEC.md. */
@@ -64,8 +64,11 @@ const EMPTY_LEFT: Rect = { x: 0, y: 0, width: PAGE.width, height: PAGE.height };
 const EMPTY_RIGHT: Rect = { x: PAGE.width, y: 0, width: PAGE.width, height: PAGE.height };
 
 /**
- * A drag as a pointer makes it: press, a first small move (the original decides direction and
- * corner from that first move), then the destination.
+ * A drag that puts the page corner at `to`. The original moves the corner to wherever the pointer
+ * is, so it is pressed at `from` and moved there (a first small move decides its direction and
+ * corner). Ours moves the corner from its rest by the pointer's travel, so it is pressed at
+ * `from` too and moved by `to` minus the rest point, which is where the original's corner would
+ * have had to start to end up at `to` as well.
  */
 const drag = (from: Pos, to: Pos): Drive => {
   const step = {
@@ -78,10 +81,29 @@ const drag = (from: Pos, to: Pos): Drive => {
       book.userMove(step, false);
       book.userMove(to, false);
     },
-    ours: (container) => {
+    ours: ({ container, book }) => {
+      // Direction and corner as the controller decides them from the press; the rest point is a
+      // pixel inside the corner, in page space, which `pageToContainer` puts back on the stage.
+      const { rect, orientation } = book;
+      const bookX = from.x - rect.left;
+      const back =
+        orientation === Orientation.portrait
+          ? bookX - rect.pageWidth <= rect.width / 5
+          : bookX < rect.width / 2;
+      const direction = back ? FlipDirection.back : FlipDirection.forward;
+      const bottom = from.y - rect.top >= rect.height / 2;
+      const rest = pageToContainer(
+        {
+          x: rect.pageWidth - REST_NUDGE.in,
+          y: bottom ? rect.height - REST_NUDGE.down : REST_NUDGE.down,
+        },
+        rect,
+        direction,
+      );
+      const aim = (pos: Pos): Pos => ({ x: from.x + pos.x - rest.x, y: from.y + pos.y - rest.y });
       pointer(container, "pointerdown", from);
-      pointer(container, "pointermove", step);
-      pointer(container, "pointermove", to);
+      pointer(container, "pointermove", aim(step));
+      pointer(container, "pointermove", aim(to));
     },
   };
 };
@@ -174,24 +196,8 @@ const scenarios: Scenario[] = [
     startPage: 2,
     drive: drag({ x: 40, y: 60 }, { x: 100, y: 120 }),
   },
-  {
-    // The original's hover lift stops one frame short of its target (its loop skips the final
-    // frame), so the rest state after the lift is not comparable. A second hover move puts both
-    // corners at an explicit point, which is.
-    name: "hover-corner",
-    stage: LANDSCAPE_STAGE,
-    drive: {
-      original: (book) => {
-        book.userMove({ x: 470, y: 30 }, false);
-        setTimeout(() => book.userMove({ x: 455, y: 45 }, false), 150);
-      },
-      ours: (container) => {
-        pointer(container, "pointermove", { x: 470, y: 30 }, false);
-        setTimeout(() => pointer(container, "pointermove", { x: 455, y: 45 }, false), 150);
-      },
-    },
-    settle: 300,
-  },
+  // Hover is not compared: the original lifts a corner that follows the pointer, this library
+  // furls the edge (SPEC.md, deliberate differences).
 ];
 
 describe("visual parity with page-flip@2.0.7", () => {
@@ -215,7 +221,7 @@ describe("visual parity with page-flip@2.0.7", () => {
       });
       mounted.push(ours);
       await frames(2);
-      scenario.drive?.ours(ours.container);
+      scenario.drive?.ours(ours);
       await frames(3);
       if (scenario.settle) await sleep(scenario.settle);
 

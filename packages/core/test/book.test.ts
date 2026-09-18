@@ -2,60 +2,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { userEvent } from "vitest/browser";
 import { type Book, createBook, FlipState, Orientation } from "../src/index.ts";
 import "../src/styles.css";
-
-function stage(
-  width: number,
-  pageCount = 6,
-): { stage: HTMLElement; container: HTMLElement; pages: HTMLElement[] } {
-  const el = document.createElement("div");
-  el.style.cssText = `width: ${width}px;`;
-  const container = document.createElement("div");
-  container.id = "book";
-  const pages = Array.from({ length: pageCount }, (_, i) => {
-    const page = document.createElement("div");
-    page.className = "my-page";
-    page.style.cssText = "background: pink;";
-    page.textContent = `Page ${i + 1}`;
-    return page;
-  });
-  container.append(...pages);
-  el.append(container);
-  document.body.append(el);
-  return { stage: el, container, pages };
-}
-
-const frames = (n: number): Promise<void> =>
-  new Promise((resolve) => {
-    let left = n;
-    const step = (): void => (--left <= 0 ? resolve() : void requestAnimationFrame(step));
-    requestAnimationFrame(step);
-  });
-
-function pointer(
-  target: Element,
-  type: string,
-  x: number,
-  y: number,
-  extra: PointerEventInit = {},
-): PointerEvent {
-  const bounds = (target.closest("#book") ?? target).getBoundingClientRect();
-  const event = new PointerEvent(type, {
-    clientX: bounds.left + x,
-    clientY: bounds.top + y,
-    pointerId: 1,
-    pointerType: "mouse",
-    isPrimary: true,
-    button: 0,
-    buttons: 1,
-    bubbles: true,
-    cancelable: true,
-    ...extra,
-  });
-  target.dispatchEvent(event);
-  return event;
-}
-
-const touch: PointerEventInit = { pointerType: "touch" };
+import { frames, pointer, stage, touch } from "./dom.ts";
 
 let cleanup: (() => void)[] = [];
 afterEach(() => {
@@ -272,8 +219,8 @@ describe("options that switch behaviour off or change the layout", () => {
     expect(book.page).toBe(0);
   });
 
-  test("hoverCorners: false never lifts a corner on hover", () => {
-    const { book, container } = mount(500, { width: 250, height: 350, hoverCorners: false });
+  test("hover: false never furls an edge on hover", () => {
+    const { book, container } = mount(500, { width: 250, height: 350, hover: false });
     pointer(container, "pointermove", 470, 30, { buttons: 0, button: -1 });
     expect(book.state).toBe(FlipState.read);
   });
