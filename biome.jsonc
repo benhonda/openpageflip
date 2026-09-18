@@ -51,6 +51,11 @@
           "correctness": {
             "noUnusedImports": "off",
             "noUnusedVariables": "off"
+          },
+          "style": {
+            // Biome reads only the frontmatter, so a component used in the template looks like a
+            // type-only import, and the "fix" (`import type`) breaks the build.
+            "useImportType": "off"
           }
         }
       }
