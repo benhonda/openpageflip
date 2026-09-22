@@ -1,5 +1,15 @@
 # @openpageflip/core
 
+## 0.6.0
+
+### Minor Changes
+
+- [`46f321f`](https://github.com/benhonda/openpageflip/commit/46f321f4ba7113ee4f9ed9399a79dc9097b9ed26) Thanks [@benhonda](https://github.com/benhonda)! - A hovered edge's furl now leans toward the pointer: the fold runs deeper at the end of the edge the pointer is near and follows it up and down the edge, instead of sitting still.
+
+- [`a5b6d5b`](https://github.com/benhonda/openpageflip/commit/a5b6d5be38855de2e0e60db10bfd851f00e367c4) Thanks [@benhonda](https://github.com/benhonda)! - Turning back in a single-page book now looks like turning forward. The previous page uncurls across the page you're on, with the same curl and shadows at the same point in the turn, instead of sliding in flat from beside the book. The pointer holds the fold, and letting go past the middle of the page lands the turn. Hovering by the spine curls the first strip of it over, leaning toward the pointer like the edge furl. Nothing of a turn is drawn beside a single-page book any more, and a hard page there swings up to upright at the spine rather than over into the hidden half, so you can see it move for the whole turn. Its shadow there fades out from the cover's edge instead of sweeping across the page as a slab with a hard edge. Two-page books look exactly as before.
+  
+  `FlipFrame.peek` is gone: that cue is now the start of an ordinary turn. In a single-page book a turn back's frames run forward (the previous page turning off itself), with that page on show as `right` and the current page as `bottom`; `flipProgress` still reports it as a turn back.
+
 ## 0.5.0
 
 ### Minor Changes
