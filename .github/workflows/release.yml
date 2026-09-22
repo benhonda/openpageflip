@@ -4,6 +4,12 @@ name: Release
 # check → bump versions and changelogs → commit them back → publish with provenance → tag → GitHub release.
 # Publish, tag and release are each skipped when already done (see scripts/release.ts), so a push
 # without changesets only checks, and a rerun finishes whatever an earlier run left undone.
+#
+# main is protected (see .github/rulesets/main.json): only a bypass actor can push to it, and the
+# default GITHUB_TOKEN can never be one. The version commit is pushed with a token minted for the
+# release GitHub App, which is on the bypass list. Set it up once: create the App with Contents
+# read/write, install it on this repo, then store its Client ID as the RELEASE_APP_CLIENT_ID
+# repository variable and its private key as the RELEASE_APP_PRIVATE_KEY secret.
 on:
   push:
     branches: [main]
@@ -20,9 +26,15 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/create-github-app-token@v3
+        id: release-app
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          token: ${{ steps.release-app.outputs.token }} # git push below goes out as the App
       - uses: actions/setup-node@v5
         with:
           node-version: 24 # npm >= 11.5.1 is required for Trusted Publishing
@@ -46,7 +58,9 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add -A
-            git commit -m "release: version packages"
+            # Unlike GITHUB_TOKEN, an App token's push triggers workflows; this run already checked
+            # and is about to publish, so the version commit itself does not need another run.
+            git commit -m "release: version packages [skip ci]"
             git push
           else
             echo "no changesets: nothing to version"

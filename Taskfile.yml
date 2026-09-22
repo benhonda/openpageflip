@@ -119,6 +119,11 @@ tasks:
     cmds:
       - bun scripts/release.ts
 
+  github:protect:
+    desc: "Apply the main ruleset and merge settings to the GitHub repo (RELEASE_APP_ID=<numeric App ID> task github:protect; needs gh auth login)"
+    cmds:
+      - bun scripts/github-protect.ts
+
   clean:
     desc: Remove build output
     cmds:

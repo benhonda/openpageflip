@@ -26,6 +26,13 @@ closed by design.
   DOM renderer. Renderer interface stays so WebGL/canvas can be added later.
 - `[settled]` React 19 only (`peer react ^19`), ref as a prop, `"use client"`.
 - `[settled]` ESM + IIFE (CDN global) for core, ESM only for react. No CommonJS.
+- `[settled]` 2026-09-22: **`main` is protected and contributions are PRs.** A ruleset
+  (`.github/rulesets/main.json`, applied by `task github:protect`) requires a squash-merged PR
+  with a green `check` and blocks force pushes. The maintainer and a release GitHub App bypass
+  it, because the release workflow pushes the version commit to `main` and the default
+  `GITHUB_TOKEN` can never be a bypass actor. Fork PR workflows need maintainer approval to
+  run (UI setting). Why not PRs for the maintainer too: a one-person project ships many small
+  commits a day and CI already runs on every push to `main` before anything publishes.
 - `[settled]` Versions start at 0.x; 1.0.0 is tagged when parity tests and the backlog
   list below are green. Not 3.0: new scope, new API, no continuity claim.
 - `[settled]` 2026-09-18: **Every published package shares one version** (Changesets `fixed`
