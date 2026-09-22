@@ -2,11 +2,14 @@
 import { getEntry } from "astro:content";
 /**
  * Starlight's header has no slot for text links, only social icons. This override renders the
- * site's nav links first, then the default icons (the documented way to add header links).
- * The splash page has no sidebar, so this is its way into the docs. Each link is resolved from
- * the content collection, so a moved page fails the build instead of leaving a dead link.
+ * site's nav links first, then the star badge, then the default icons (the documented way to add
+ * header links). The splash page has no sidebar, so this is its way into the docs. Each link is
+ * resolved from the content collection, so a moved page fails the build instead of leaving a
+ * dead link.
  */
+import { Icon } from "@astrojs/starlight/components";
 import Default from "@astrojs/starlight/components/SocialIcons.astro";
+import { repoApiUrl, repoUrl } from "../site.ts";
 
 const links = await Promise.all(
   [
@@ -21,7 +24,40 @@ const links = await Promise.all(
 ---
 
 {links.map(({ text, href }) => <a {href} class="sl-flex nav-link">{text}</a>)}
+{/*
+  The star count comes from GitHub's API in the browser, not at build: the count stays live
+  between deploys, and it is the visitor's own rate limit that is spent, not the shared one of
+  the build host. Until it arrives, or if it never does, the badge is just the link.
+*/}
+<a href={repoUrl} rel="me" class="sl-flex star-badge" data-github-stars={repoApiUrl}>
+  <Icon name="github" />
+  <span>Star<span class="sr-only"> on GitHub</span></span>
+  <span class="count" />
+</a>
 <Default {...Astro.props}><slot /></Default>
+
+<script>
+  // The badge renders twice per page (the header and the mobile menu footer); one fetch fills both.
+  const badges = document.querySelectorAll<HTMLAnchorElement>("[data-github-stars]");
+  const api = badges[0]?.getAttribute("data-github-stars");
+  if (api) {
+    const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+    try {
+      const response = await fetch(api, { headers: { Accept: "application/vnd.github+json" } });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      const { stargazers_count: stars }: { stargazers_count?: unknown } = await response.json();
+      if (typeof stars !== "number") throw new Error("no stargazers_count in the response");
+      for (const badge of badges) {
+        const count = badge.querySelector(".count");
+        if (count === null) continue;
+        count.textContent = compact.format(stars).toLowerCase();
+        count.setAttribute("aria-label", `${stars} stars`);
+      }
+    } catch (error) {
+      console.warn(`Star badge: could not read ${api}`, error);
+    }
+  }
+</script>
 
 <style>
   .nav-link {
@@ -31,5 +67,32 @@ const links = await Promise.all(
   }
   .nav-link:hover {
     color: var(--sl-color-white);
+  }
+
+  .star-badge {
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 999px;
+    color: var(--sl-color-text-accent);
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+  }
+  .star-badge:hover {
+    color: var(--sl-color-white);
+    border-color: var(--sl-color-gray-3);
+  }
+  .count {
+    padding-inline-start: 0.5rem;
+    border-inline-start: 1px solid var(--sl-color-gray-5);
+    color: var(--sl-color-gray-2);
+    font-variant-numeric: tabular-nums;
+  }
+  /* No count yet (still loading, or the API said no): the badge is just the link. */
+  .count:empty {
+    display: none;
   }
 </style>

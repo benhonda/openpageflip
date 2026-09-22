@@ -16,6 +16,8 @@ export const siteDescription = corePkg.description;
 /** Where the site is served. The READMEs and the react manifest are synced to it by `task docs:readme`. */
 export const siteUrl = corePkg.homepage;
 export const repoUrl = corePkg.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
+/** The repository on GitHub's REST API, where the header's star badge reads its count from. */
+export const repoApiUrl = `https://api.github.com/repos${new URL(repoUrl).pathname}`;
 export const packageNames = [corePkg.name, reactPkg.name] as const;
 
 /**

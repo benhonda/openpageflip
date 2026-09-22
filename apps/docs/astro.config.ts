@@ -41,7 +41,7 @@ export default defineConfig({
       // Footer date from git. Vercel clones ten commits deep, which would date every older page
       // to the same commit, so vercel.json refuses to build a shallow clone.
       lastUpdated: true,
-      social: [{ icon: "github", label: "GitHub", href: repoUrl }],
+      // The repo link is the star badge in HeaderLinks.astro, not a social icon.
       editLink: { baseUrl: `${repoUrl}/edit/main/apps/docs/` },
       customCss: ["./src/styles/demo.css"],
       components: { SocialIcons: "./src/components/HeaderLinks.astro" },
