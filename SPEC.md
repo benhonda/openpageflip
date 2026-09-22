@@ -194,10 +194,11 @@ Bun workspaces + catalog · tsdown · TypeScript 7 (`strict`, `verbatimModuleSyn
   packages' `homepage`, with `task check` failing on drift. GitHub Pages was the first assumption
   and was dropped: its `/<repo>` base path broke every asset URL on Vercel. The domain itself is
   attached in the Vercel project settings and DNS, which the repo cannot see.
-- `[assumption]` Vercel's build image runs Bun 1.3.x, which cannot read the Bun 1.4 lockfile
-  (`lockfileVersion: 2`). `apps/docs/vercel.json` pins the install to `bunx bun@1.4.0` from the
-  repo root, Vercel's documented way; that version literal must move with `packageManager` in
-  the root `package.json` until Vercel's image ships Bun 1.4.
+- `[settled]` 2026-09-22: Vercel's build image selects Bun 1.4 from the lockfile
+  (`lockfileVersion: 2`) and honours `packageManager` in the root `package.json`, so
+  `apps/docs/vercel.json` runs a plain `bun install --frozen-lockfile` from the repo root. The
+  earlier `bunx bun@1.4.0` bootstrap, needed while the image ran Bun 1.3.x, stopped working
+  with Vercel CLI 59.23 and is gone.
 
 The Taskfile is the SSOT for how anything is run; `package.json` scripts are not.
 
