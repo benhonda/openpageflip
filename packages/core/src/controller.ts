@@ -10,7 +10,7 @@ import { type Clock, startTween, type Tween } from "./animation.ts";
 import type { Size } from "./axes.ts";
 import { containerToBook, containerToPage } from "./coords.ts";
 import { computeFold, type Fold } from "./geometry/fold.ts";
-import { distance, type Point } from "./geometry/point.ts";
+import { distance, type Point, reflect } from "./geometry/point.ts";
 import type { BookRect, LayoutResult } from "./layout.ts";
 import {
   ClickMode,
@@ -104,6 +104,8 @@ type Session = {
    * far past the spine the kernel says it is: let go, it always goes back.
    */
   readonly peek: boolean;
+  /** Where along the edge a furl's pointer is: 1 at the top, 0 midway, -1 at the bottom. */
+  lean: number;
   fold: Fold | null;
   progress: number;
   hardAngle: number;
@@ -119,6 +121,11 @@ const DRAG_THRESHOLD = 5;
  * past the spine.
  */
 const FURL = 30;
+/**
+ * How far a furl's crease tilts toward the pointer: this much deeper at the end of the edge
+ * the pointer is at, as much shallower at the other. Midway along the edge it is parallel.
+ */
+const TILT = 15;
 /**
  * Where a corner sits when a fold starts from rest: `in` from the edge and `down` it. Exactly at
  * rest the fold is degenerate (the crease would lie on the edge), and the kernel treats anything
@@ -362,12 +369,20 @@ export class FlipController {
       : this.animateTo(pos, { x: session.pageWidth, y }, false, true);
   }
 
-  /** Resolves with whether the page turned. A cancelled animation resolves with `false`. */
-  private animateTo(from: Point, to: Point, turn: boolean, reset: boolean): Promise<boolean> {
+  /**
+   * Resolves with whether the page turned. A cancelled animation resolves with `false`. A `to`
+   * function is read every frame, so a hover cue can follow the pointer on its way in.
+   */
+  private animateTo(
+    from: Point,
+    to: Point | (() => Point),
+    turn: boolean,
+    reset: boolean,
+  ): Promise<boolean> {
     this.tween?.finish();
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const length = Math.max(Math.abs(dx), Math.abs(dy));
+    const target = typeof to === "function" ? to : () => to;
+    const initial = target();
+    const length = Math.max(Math.abs(initial.x - from.x), Math.abs(initial.y - from.y));
     const duration =
       Math.max(SHORTEST_FLIP, Math.min(1, length / FULL_FLIP_LENGTH)) * this.options.flipDuration;
 
@@ -376,7 +391,10 @@ export class FlipController {
       this.tween = startTween(this.clock, {
         duration,
         easing: this.options.easing,
-        onFrame: (t) => this.applyFold({ x: from.x + dx * t, y: from.y + dy * t }),
+        onFrame: (t) => {
+          const { x, y } = target();
+          this.applyFold({ x: from.x + (x - from.x) * t, y: from.y + (y - from.y) * t });
+        },
         onEnd: () => {
           this.tween = null;
           this.settleTween = null;
@@ -411,9 +429,15 @@ export class FlipController {
     if (current !== null) {
       const bookPos = containerToBook(containerPos, this.rect);
       const held = this.isHandle(containerPos) && this.directionAt(bookPos) === current.direction;
-      // Along the edge the furl holds, wherever the pointer is on it, and one that is settling
-      // keeps settling: it lands, and the next move furls the edge again.
-      if (held) return;
+      // Along the edge the furl holds and leans toward the pointer; on its way in it is already
+      // aiming there. One that is settling keeps settling: it lands, and the next move furls the
+      // edge again.
+      if (held) {
+        if (this.state !== FlipState.foldCorner) return;
+        current.lean = this.leanAt(containerPos, current);
+        if (this.tween === null) this.applyFold(this.cuePoint(current));
+        return;
+      }
       if (this.state === FlipState.foldCorner) {
         // Off the edge: let it settle. A settle already running is left alone; restarting it on
         // every move made the edge stutter and never land.
@@ -428,12 +452,17 @@ export class FlipController {
     const session = this.start(containerPos, true);
     if (session === null) return;
     this.setState(FlipState.foldCorner);
+    session.lean = this.leanAt(containerPos, session);
     const rest = this.restPoint(session);
-    const [from, to] = session.peek
-      ? [{ x: 0, y: rest.y }, this.peekPoint(session)]
-      : [rest, this.furlPoint(session)];
+    const from = session.peek ? { x: 0, y: rest.y } : rest;
     this.applyFold(from);
-    void this.animateTo(from, to, false, false);
+    void this.animateTo(from, () => this.cuePoint(session), false, false);
+  }
+
+  /** Where along the edge the pointer is, as `Session.lean` counts it. */
+  private leanAt(containerPos: Point, session: Session): number {
+    const { y } = containerToPage(containerPos, this.rect, session.direction);
+    return 1 - 2 * Math.min(1, Math.max(0, y / session.pageHeight));
   }
 
   /** The corner at rest, nudged in and down by `REST_NUDGE` so the fold is not degenerate. */
@@ -445,14 +474,23 @@ export class FlipController {
     };
   }
 
-  /** The edge furled: the corner pulled straight in, so the crease runs parallel to the spine. */
-  private furlPoint(session: Session): Point {
-    return { x: session.pageWidth - 2 * FURL, y: this.restPoint(session).y };
-  }
-
-  /** The page peeking in: its edge pulled straight over the spine, so it shows as a strip along it. */
-  private peekPoint(session: Session): Point {
-    return { x: -FURL, y: this.restPoint(session).y };
+  /**
+   * Where the corner goes for a hover cue: folded over a crease `FURL` px in from the edge, or
+   * for a peek far enough in that the page shows a `FURL` px strip past the spine. A furl's
+   * crease tilts by the lean, so the fold is deeper at the pointer's end of the edge; a peek's
+   * stays parallel, because its shadow (`drawPeekShadow`) is drawn square to the spine. The
+   * corner is nudged in like the rest point, so the fold is not degenerate when it is parallel.
+   */
+  private cuePoint(session: Session): Point {
+    const { pageWidth: w, pageHeight: h, peek } = session;
+    const depth = peek ? (w + FURL) / 2 : FURL;
+    const tilt = peek ? 0 : TILT * session.lean;
+    const bottom = session.corner === FlipCorner.bottom;
+    const { x, y } = reflect({ x: w, y: bottom ? h : 0 }, [
+      { x: w - depth - tilt, y: 0 },
+      { x: w - depth + tilt, y: h },
+    ]);
+    return { x, y: y + (bottom ? -REST_NUDGE.down : REST_NUDGE.down) };
   }
 
   /** The mouse left the book: let a furled edge settle. */
@@ -599,6 +637,7 @@ export class FlipController {
       pageWidth: this.rect.pageWidth,
       pageHeight: this.rect.height,
       peek: cue && this.orientation === Orientation.portrait && direction === FlipDirection.back,
+      lean: 0,
       fold: null,
       progress: 0,
       hardAngle: 0,

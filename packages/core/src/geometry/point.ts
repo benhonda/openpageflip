@@ -30,6 +30,14 @@ export function distance(a: Point, b: Point): number {
   return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 }
 
+/** A point mirrored across the line through a segment. */
+export function reflect(point: Point, [a, b]: Segment): Point {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const t = ((point.x - a.x) * dx + (point.y - a.y) * dy) / (dx * dx + dy * dy);
+  return { x: 2 * (a.x + t * dx) - point.x, y: 2 * (a.y + t * dy) - point.y };
+}
+
 /** Angle between two lines in radians, via the dot product of their normals. */
 export function angleBetweenLines(one: Segment, two: Segment): number {
   const a1 = one[0].y - one[1].y;

@@ -55,8 +55,12 @@ closed by design.
   it.** Hovering the edge strip furls the edge: the corner is pulled straight in (`FURL` px, with
   a whisker of tilt so the fold is not degenerate), so the crease runs parallel to the spine and
   the same cue reads on every binding (the bottom edge of a notepad). It holds anywhere along the
-  edge and settles when the pointer leaves. It replaced the nearer-corner lift, which was one
-  corner's cue for a whole-edge zone, and the pointer-follow near a corner that came with it.
+  edge and settles when the pointer leaves. 2026-09-22: the crease leans toward the pointer
+  (`TILT` px deeper at the pointer's end of the edge, as much shallower at the other, parallel
+  midway), so the cue answers the pointer without giving up the whole edge. The peek below stays
+  parallel: its shadow is drawn square to the spine. It replaced the nearer-corner lift, which
+  was one corner's cue for a whole-edge zone, and the pointer-follow near a corner that came
+  with it.
   Drags move the fold by the pointer's travel from where it took hold (the furl's depth when
   there is one), so pulling straight in from anywhere on the edge deepens the furl and pulling
   from a corner folds across; the original moved the corner to wherever the pointer was, which
@@ -261,8 +265,9 @@ this library. These are the places where it was wrong and we did not copy it:
   of the edge pulled straight in furls the whole edge. The original put the corner wherever the
   pointer was, which snapped that press into a diagonal fold. The parity suite drives our drags
   by travel so the corner still lands where the original's does.
-- Hovering an edge furls the whole edge, and stays furled anywhere along it. The original lifted
-  the nearer corner and let it follow the pointer. Hover is not compared by the parity suite.
+- Hovering an edge furls the whole edge, and stays furled anywhere along it, leaning toward the
+  pointer. The original lifted the nearer corner and let it follow the pointer. Hover is not
+  compared by the parity suite.
 - Shadows default to `shadowOpacity: 0.35` and the turning page has a hairline edge
   (`.opf-page--turning` in `packages/core/src/styles.css`, coloured by `--opf-page-edge`). The
   original's full-strength shadows are a black bar on light paper, and once they are softened a

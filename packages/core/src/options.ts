@@ -113,7 +113,7 @@ export type BookOptions = {
   readonly swipe?: boolean;
   /** Minimum swipe travel in CSS pixels. @default 30 */
   readonly swipeDistance?: number;
-  /** Show where a page can be taken hold of when the mouse hovers there: the edge furls, and in a single-page book the page that turns back peeks in over the spine. @default true */
+  /** Show where a page can be taken hold of when the mouse hovers there: the edge furls, leaning toward the pointer, and in a single-page book the page that turns back peeks in over the spine. @default true */
   readonly hover?: boolean;
   /**
    * Pointer events starting on an element matching this selector never start a flip.

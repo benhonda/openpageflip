@@ -279,7 +279,7 @@ describe("FlipController", () => {
 
   test("hovering an edge furls it over a quarter of flipDuration; leaving settles it as slowly", () => {
     const { controller, manual, last } = setup();
-    controller.hover({ x: 470, y: 30 });
+    controller.hover({ x: 470, y: 175 });
     expect(controller.currentState).toBe(FlipState.foldCorner);
     // Halfway through the 250ms furl the edge is part way in, not already there.
     for (let i = 0; i < 8; i++) manual.advance(16);
@@ -287,8 +287,9 @@ describe("FlipController", () => {
     expect(midway?.x).toBeGreaterThan(190);
     expect(midway?.x).toBeLessThan(249);
     for (let i = 0; i < 10; i++) manual.advance(16);
-    // The corner is pulled straight in: the crease runs parallel to the spine, 30px in.
-    expect(last().flip?.fold.position).toEqual({ x: 190, y: REST_NUDGE.down });
+    // Midway along the edge the corner is pulled straight in: the crease runs parallel to the
+    // spine, 30px in.
+    expect(last().flip?.fold.position).toEqual({ x: 190, y: 350 - REST_NUDGE.down });
     expect(Math.abs(last().flip?.fold.angle ?? 1)).toBeLessThan(0.05);
 
     controller.hoverEnd();
@@ -301,18 +302,27 @@ describe("FlipController", () => {
     expect(controller.page).toBe(0);
   });
 
-  test("the furl holds anywhere along the edge, and settles when the pointer leaves it", () => {
+  test("the furl holds anywhere along the edge, leaning toward the pointer, and settles when it leaves", () => {
     const { controller, manual, last } = setup();
+    /** How far in the crease is at the top and at the bottom of the page. */
+    const depths = () => {
+      const { top, bottom } = last().flip?.fold.intersections ?? {};
+      return { top: 250 - (top?.x ?? 250), bottom: 250 - (bottom?.x ?? 250) };
+    };
     controller.hover({ x: 470, y: 30 });
+    // On its way in, the furl already aims at where the pointer has moved to.
+    for (let i = 0; i < 4; i++) manual.advance(16);
+    controller.hover({ x: 470, y: 320 });
     for (let i = 0; i < 20; i++) manual.advance(16);
-    const furled = last().flip?.fold.position;
-    // Down the edge, across the midline, to the other corner: nothing changes.
-    for (const y of [150, 200, 320]) {
-      controller.hover({ x: 470, y });
-      manual.advance(16);
-      expect(controller.currentState).toBe(FlipState.foldCorner);
-      expect(last().flip?.fold.position).toEqual(furled);
-    }
+    expect(depths().bottom).toBeGreaterThan(depths().top + 10);
+    // Furled, it follows the pointer frame for frame, with no animation to wait on.
+    expect(manual.pending()).toBe(0);
+    controller.hover({ x: 470, y: 30 });
+    expect(depths().top).toBeGreaterThan(depths().bottom + 10);
+    controller.hover({ x: 470, y: 175 });
+    // Midway it is parallel, but for the whisker of tilt `REST_NUDGE` gives it.
+    expect(Math.abs(depths().top - depths().bottom)).toBeLessThan(3);
+    expect(controller.currentState).toBe(FlipState.foldCorner);
     expect(manual.pending()).toBe(0);
     controller.hover({ x: 300, y: 175 });
     expect(controller.currentState).toBe(FlipState.read);
@@ -320,9 +330,9 @@ describe("FlipController", () => {
 
   test("a settling edge is not restarted by the pointer moving on; it lands on schedule", () => {
     const { controller, manual, last } = setup();
-    controller.hover({ x: 470, y: 30 });
+    controller.hover({ x: 470, y: 175 });
     for (let i = 0; i < 20; i++) manual.advance(16);
-    expect(last().flip?.fold.position).toEqual({ x: 190, y: REST_NUDGE.down });
+    expect(last().flip?.fold.position).toEqual({ x: 190, y: 350 - REST_NUDGE.down });
 
     // Off the edge, and the mouse keeps moving while the edge settles.
     controller.hover({ x: 300, y: 175 });
@@ -343,7 +353,7 @@ describe("FlipController", () => {
 
   test("an edge that is settling waits to land; the other page's edge is left alone meanwhile", () => {
     const { controller, manual, last } = setup({ startPage: 2 });
-    controller.hover({ x: 470, y: 30 });
+    controller.hover({ x: 470, y: 175 });
     for (let i = 0; i < 20; i++) manual.advance(16);
     // Straight across to the left page's edge: the right one settles first.
     controller.hover({ x: 30, y: 30 });
@@ -391,18 +401,18 @@ describe("FlipController", () => {
     controller.pointerDrag({ x: 450, y: 150 });
     expect(controller.currentState).toBe(FlipState.userFold);
     expect(last().flip?.fold.position.x).toBeCloseTo(midway.x - 20, 6);
-    expect(last().flip?.fold.position.y).toBe(midway.y);
+    expect(last().flip?.fold.position.y).toBeCloseTo(midway.y, 6);
     expect(manual.pending()).toBe(0);
   });
 
   test("a click on a furled edge flips on from the furl", async () => {
     const { controller, manual, last } = setup({ flipDuration: 200 });
-    controller.hover({ x: 470, y: 150 });
+    controller.hover({ x: 470, y: 175 });
     for (let i = 0; i < 20; i++) manual.advance(16);
-    controller.pointerDown({ x: 470, y: 150 });
-    controller.pointerUp({ x: 470, y: 150 });
+    controller.pointerDown({ x: 470, y: 175 });
+    controller.pointerUp({ x: 470, y: 175 });
     expect(controller.currentState).toBe(FlipState.flipping);
-    expect(last().flip?.fold.position).toEqual({ x: 190, y: REST_NUDGE.down });
+    expect(last().flip?.fold.position).toEqual({ x: 190, y: 350 - REST_NUDGE.down });
     manual.advance(16);
     expect(last().flip?.fold.position.x).toBeLessThan(190);
     for (let i = 0; i < 30; i++) manual.advance(16);
@@ -503,7 +513,7 @@ describe("FlipController", () => {
 
   test("a furled edge reports its little progress, and settling closes the turn on 0", () => {
     const { controller, manual, progress } = setup({ startPage: 2 });
-    controller.hover({ x: 30, y: 30 });
+    controller.hover({ x: 30, y: 175 });
     for (let i = 0; i < 20; i++) manual.advance(16);
     expect(progress.at(-1)).toMatchObject({ from: 2, to: 0, direction: "back" });
     expect(progress.at(-1)?.progress).toBeCloseTo(60 / 500, 6);
