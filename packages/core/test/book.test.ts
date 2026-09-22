@@ -425,7 +425,7 @@ describe("options that switch behaviour off or change the layout", () => {
     expect(document.elementFromPoint(bounds.left + 150, bounds.top + 200)).toBe(pages[0]);
   });
 
-  test("a peek shows only past the spine: nothing of the page coming back is drawn beside the book", async () => {
+  test("a single-page book's page coming back uncurls over the page on show, never beside the book", async () => {
     const s = stage(900);
     s.container.style.marginLeft = "300px";
     const book = createBook(s.container, {
@@ -438,29 +438,58 @@ describe("options that switch behaviour off or change the layout", () => {
       book.destroy();
       s.stage.remove();
     });
-    pointer(s.container, "pointermove", 15, 400, { buttons: 0 });
-    await frames(40);
     const bounds = s.container.getBoundingClientRect();
     const at = (x: number): Element | null =>
       document.elementFromPoint(bounds.left + x, bounds.top + 200);
+    const clone = (): Element | null => s.container.querySelector("[data-opf-clone]");
+    // The hover cue: the page coming back, curled over itself, in a strip along the spine.
+    pointer(s.container, "pointermove", 15, 400, { buttons: 0 });
+    await frames(40);
+    // The curl is an inert copy, which hit testing passes through to the page itself beneath it.
+    expect(clone()).not.toBeNull();
     expect(at(15)).toBe(s.pages[1]);
     expect(at(60)).toBe(s.pages[2]);
-    // The rest of the turning page lies over the hidden half, left of the book.
-    expect(at(-60)).not.toBe(s.pages[1]);
-    // The fold's own shadows hug its crease, off stage. The strip drops its own on the page under
-    // it, from its edge and as wide as it is deep.
-    const shadows = Array.from(s.container.querySelectorAll<HTMLElement>(".opf-shadow")).filter(
+    expect(s.container.contains(at(-60))).toBe(false);
+    // Taken in hand and pulled past the middle: laid down behind its crease, still all on the page.
+    pointer(s.container, "pointerdown", 15, 400);
+    pointer(s.container, "pointermove", 215, 400);
+    expect(at(60)).toBe(s.pages[1]);
+    expect(at(280)).toBe(s.pages[2]);
+    expect(s.container.contains(at(-60))).toBe(false);
+    pointer(s.container, "pointercancel", 215, 400);
+  });
+
+  test("in a single-page book a hard page casts one shadow, darkest at the spine and fading outward", async () => {
+    const s = stage(900);
+    s.container.style.marginLeft = "300px";
+    const cover = s.pages[0];
+    if (cover !== undefined) cover.dataset["density"] = "hard";
+    const book = createBook(s.container, {
+      width: 300,
+      height: 420,
+      layout: "single",
+      startPage: 1,
+    });
+    cleanup.push(() => {
+      book.destroy();
+      s.stage.remove();
+    });
+    pointer(s.container, "pointermove", 15, 100, { buttons: 0 });
+    await frames(40);
+    const shown = Array.from(s.container.querySelectorAll<HTMLElement>(".opf-shadow")).filter(
       (el) => el.style.display !== "none",
     );
-    expect(shadows.map((el) => el.className.replace(/.*--/, ""))).toEqual(["outer"]);
-    const shadow = shadows[0]?.getBoundingClientRect();
-    expect(shadow?.left).toBeCloseTo(bounds.left + 30, 0);
-    expect(shadow?.width).toBeCloseTo(30, 0);
-    // In hand it is a turn like any other, and the whole page is drawn.
-    pointer(s.container, "pointerdown", 15, 400);
-    pointer(s.container, "pointermove", 25, 400);
-    expect(at(-60)).toBe(s.pages[1]);
-    pointer(s.container, "pointercancel", 25, 400);
+    // Not the landscape pair: one gradient from the spine (the container's left edge here), dark
+    // end first, so nothing darkens toward a cut-off far edge.
+    expect(shown.map((el) => el.className.replace(/.*--/, ""))).toEqual(["hard-outer"]);
+    const shadow = shown[0];
+    expect(shadow?.getBoundingClientRect().left).toBeCloseTo(
+      s.container.getBoundingClientRect().left,
+      0,
+    );
+    expect(shadow?.style.background).toMatch(
+      /to right, rgba\(0, 0, 0, 0\.[1-9]\d*\).*rgba\(0, 0, 0, 0\)\)/,
+    );
   });
 
   test("easing shapes the corner's path", async () => {

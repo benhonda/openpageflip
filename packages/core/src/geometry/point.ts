@@ -70,23 +70,23 @@ export function rotatePoint(point: Point, origin: Point, angle: number): Point {
 }
 
 /**
- * The part of a polygon with `x <= maxX` (Sutherland–Hodgman against one edge). Empty when
+ * The part of a polygon with `x >= minX` (Sutherland–Hodgman against one edge). Empty when
  * nothing with any area is left, so a polygon that only touches the line does not survive as a
  * sliver.
  */
-export function clipPolygonToMaxX(points: readonly Point[], maxX: number): readonly Point[] {
+export function clipPolygonToMinX(points: readonly Point[], minX: number): readonly Point[] {
   const kept: Point[] = [];
   let from = points.at(-1);
   if (from === undefined) return kept;
   for (const to of points) {
-    if (from.x <= maxX !== to.x <= maxX) {
-      const t = (maxX - from.x) / (to.x - from.x);
-      kept.push({ x: maxX, y: from.y + (to.y - from.y) * t });
+    if (from.x >= minX !== to.x >= minX) {
+      const t = (minX - from.x) / (to.x - from.x);
+      kept.push({ x: minX, y: from.y + (to.y - from.y) * t });
     }
-    if (to.x <= maxX) kept.push(to);
+    if (to.x >= minX) kept.push(to);
     from = to;
   }
-  return kept.some((p) => p.x < maxX) ? kept : [];
+  return kept.some((p) => p.x > minX) ? kept : [];
 }
 
 /**

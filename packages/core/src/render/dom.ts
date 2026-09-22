@@ -10,8 +10,8 @@
 import { type Axes, axesFor, isVertical, type ScreenSide } from "../axes.ts";
 import type { Frame, ShadowData } from "../controller.ts";
 import { pageToContainer } from "../coords.ts";
-import type { Point, RectPoints } from "../geometry/point.ts";
-import { clipPolygonToMaxX, rotatePoint } from "../geometry/point.ts";
+import type { Point } from "../geometry/point.ts";
+import { clipPolygonToMinX, rotatePoint } from "../geometry/point.ts";
 import type { BookRect } from "../layout.ts";
 import {
   type Binding,
@@ -28,7 +28,6 @@ const Z = {
   flat: 1,
   bottom: 3,
   hardShadow: 4,
-  peekShadow: 4,
   flipping: 5,
   hardInnerShadow: 5,
   shadow: 10,
@@ -82,7 +81,7 @@ type SizingOptions = Pick<
   "autoSize" | "size" | "width" | "height" | "minWidth" | "maxWidth" | "layout" | "binding"
 >;
 
-/** Element-local points as a `clip-path`. No points (a peek wholly off stage) clips everything. */
+/** Element-local points as a `clip-path`. No points (a page wholly off stage) clips everything. */
 function clipPath(points: readonly Point[]): string {
   return points.length === 0
     ? "inset(100%)"
@@ -235,6 +234,12 @@ export class DomRenderer {
       }
     }
 
+    // In portrait every turn runs forward (a back turn is reversed, see `Session` in
+    // `controller.ts`), and only the page on show, x >= 0 in its page space, is on stage: what
+    // folds past the spine would float beside the book.
+    const onStage = (points: readonly Point[]): readonly Point[] =>
+      frame.orientation === Orientation.portrait ? clipPolygonToMinX(points, 0) : points;
+
     const flippingSide: Side =
       flip.direction === FlipDirection.forward && frame.orientation !== Orientation.portrait
         ? "left"
@@ -247,8 +252,7 @@ export class DomRenderer {
       this.drawSoft(
         flip.flipping,
         flippingSide,
-        // A peek is drawn only where it has come past the spine, which in its page space is x <= 0.
-        flip.peek ? clipPolygonToMaxX(flip.fold.flippingClip, 0) : flip.fold.flippingClip,
+        onStage(flip.fold.flippingClip),
         flip.fold.activeCorner,
         flip.fold.angle,
         flip.direction,
@@ -260,6 +264,9 @@ export class DomRenderer {
 
     if (flip.shadow === null) {
       this.hideShadows();
+    } else if (flippingHard && frame.orientation === Orientation.portrait) {
+      this.hideSoftShadows();
+      this.drawHardCastShadow(flip.shadow, rect);
     } else if (flippingHard) {
       this.hideSoftShadows();
       // A hard page's shadow needs a page to fall on, and either side can be bare: a cover opens
@@ -272,8 +279,12 @@ export class DomRenderer {
       });
     } else {
       this.hideHardShadows();
-      if (flip.peek) this.drawPeekShadow(flip.shadow, flip.fold.flippingClip, rect);
-      else this.drawSoftShadows(flip.shadow, flip.fold.rect, rect);
+      const { topLeft, topRight, bottomRight, bottomLeft } = flip.fold.rect;
+      this.drawSoftShadows(
+        flip.shadow,
+        onStage([topLeft, topRight, bottomRight, bottomLeft]),
+        rect,
+      );
     }
   }
 
@@ -443,7 +454,8 @@ export class DomRenderer {
 
   // ---- shadows --------------------------------------------------------------------------------
 
-  private drawSoftShadows(shadow: ShadowData, pageRect: RectPoints, rect: BookRect): void {
+  /** `flipping` is the part of the turning page the inner shadow may fall on. */
+  private drawSoftShadows(shadow: ShadowData, flipping: readonly Point[], rect: BookRect): void {
     const forward = shadow.direction === FlipDirection.forward;
     const at = pageToContainer(shadow.pos, rect, shadow.direction);
     const angle = shadow.angle + (3 * Math.PI) / 2;
@@ -485,25 +497,9 @@ export class DomRenderer {
     this.shadows.inner.style.cssText = place(
       innerWidth,
       forward ? innerWidth : 0,
-      [pageRect.topLeft, pageRect.topRight, pageRect.bottomRight, pageRect.bottomLeft],
+      flipping,
       `${this.toward(forward ? "left" : "right")}, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0.05) 15%, rgba(0, 0, 0, ${shadow.opacity}) 35%, rgba(0, 0, 0, 0) 100%`,
     );
-  }
-
-  /**
-   * The shadow a peeking page's edge drops on the page it lies over, as wide as the peek is deep.
-   * The fold's own shadows hug its crease, which for a peek is half a page away in the hidden
-   * half, so none of them reaches the strip on show; they are left out.
-   */
-  private drawPeekShadow(shadow: ShadowData, flippingClip: readonly Point[], rect: BookRect): void {
-    this.hideSoftShadows();
-    // A peek turns back, so its page space runs leftward from the spine: the edge is its least x.
-    const depth = -Math.min(0, ...flippingClip.map((p) => p.x));
-    if (depth === 0) return;
-    const spine = rect.left + rect.width / 2;
-    const box = this.axes.size({ width: depth, height: rect.height });
-    const at = this.placement({ x: spine + depth, y: rect.top }, { x: 0, y: 0 }, depth).translate;
-    this.shadows.outer.style.cssText = `display: block; z-index: ${Z.peekShadow}; width: ${box.width}px; height: ${box.height}px; left: ${at.x}px; top: ${at.y}px; background: linear-gradient(${this.toward("right")}, rgba(0, 0, 0, ${shadow.opacity}), rgba(0, 0, 0, 0));`;
   }
 
   /**
@@ -535,6 +531,25 @@ export class DomRenderer {
     this.shadows.hardOuter.style.cssText = showOuter
       ? `${common} z-index: ${Z.hardShadow}; background: linear-gradient(${this.toward("left")}, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? ` ${this.spin(180)}` : ""};`
       : "display: none";
+  }
+
+  /**
+   * In portrait a hard page lifts over the page it uncovers with no page on the other side to take
+   * the landscape pair's second gradient, and the first, darkest at its far end and cut off
+   * square, would sweep across that page on its own. Instead the board casts one shadow from the
+   * spine, darkest at its foot and fading outward, reaching further past the board's edge the
+   * higher it stands. The board covers what lies under it, so what shows trails off its edge and
+   * fades as it lies flat.
+   */
+  private drawHardCastShadow(shadow: ShadowData, rect: BookRect): void {
+    this.shadows.hardInner.style.cssText = "display: none";
+    // Portrait swings a quarter turn: `progress` 0..100 is flat to upright.
+    const lift = (Math.min(100, shadow.progress) / 100) * (Math.PI / 2);
+    const reach = rect.pageWidth * Math.cos(lift) + (rect.pageWidth / 3) * Math.sin(lift);
+    const spine = rect.left + rect.width / 2;
+    const box = this.axes.size({ width: reach, height: rect.height });
+    const at = this.placement({ x: spine, y: rect.top }, { x: 0, y: 0 }, reach).translate;
+    this.shadows.hardOuter.style.cssText = `display: block; z-index: ${Z.hardShadow}; width: ${box.width}px; height: ${box.height}px; left: ${at.x}px; top: ${at.y}px; background: linear-gradient(${this.toward("right")}, rgba(0, 0, 0, ${shadow.opacity}), rgba(0, 0, 0, 0));`;
   }
 
   private hideSoftShadows(): void {

@@ -53,9 +53,8 @@ export function staticPages(
 
 /**
  * The page that lifts (its back face is what the viewer sees mid-flip), the page revealed
- * underneath it (`null` when the turn reveals nothing: a page coming back in portrait, or a turn
- * onto a page shown alone), and the first page of the spread the turn leads `to`. `null` when
- * there is no spread in that direction.
+ * underneath it (`null` when the turn reveals nothing: a turn onto a page shown alone), and the
+ * first page of the spread the turn leads `to`. `null` when there is no spread in that direction.
  */
 export function flipPages(
   spreads: readonly Spread[],
@@ -70,8 +69,8 @@ export function flipPages(
   if (orientation === Orientation.portrait) {
     const current = spreads[spreadIndex]?.[0];
     if (current === undefined) return null;
-    // Portrait shows the current page lifting away or the previous page coming back.
-    return forward ? { flipping: current, bottom: to, to } : { flipping: to, bottom: null, to };
+    // Portrait shows the current page lifting away, or the previous page coming back over it.
+    return forward ? { flipping: current, bottom: to, to } : { flipping: to, bottom: current, to };
   }
   if (target.length === 1) return { flipping: to, bottom: null, to };
   return forward

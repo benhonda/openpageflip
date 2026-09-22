@@ -57,28 +57,33 @@ closed by design.
   the same cue reads on every binding (the bottom edge of a notepad). It holds anywhere along the
   edge and settles when the pointer leaves. 2026-09-22: the crease leans toward the pointer
   (`TILT` px deeper at the pointer's end of the edge, as much shallower at the other, parallel
-  midway), so the cue answers the pointer without giving up the whole edge. The peek below stays
-  parallel: its shadow is drawn square to the spine. It replaced the nearer-corner lift, which
-  was one corner's cue for a whole-edge zone, and the pointer-follow near a corner that came
-  with it.
+  midway), so the cue answers the pointer without giving up the whole edge. It replaced the
+  nearer-corner lift, which was one corner's cue for a whole-edge zone, and the pointer-follow
+  near a corner that came with it.
   Drags move the fold by the pointer's travel from where it took hold (the furl's depth when
   there is one), so pulling straight in from anywhere on the edge deepens the furl and pulling
   from a corner folds across; the original moved the corner to wherever the pointer was, which
   snapped a mid-edge press into a diagonal fold. A click on a furled edge flips on from the furl.
   The parity suite drives our drags by travel and no longer compares hover, both listed under
   deliberate differences. Option `hoverCorners` became `hover`.
-- `[settled]` 2026-09-18: **In portrait the spine-side edge's cue is a peek.** The page that
-  turns back lies in the hidden half, so a furl of its far edge shows nothing, or floats beside
-  the book. Its cue is that page pulled `FURL` px over the spine instead: a strip along the
-  visible page's spine edge, under the pointer. The kernel counts a corner past the spine as a
-  turn half made, so two rules come with it (`Session.peek` in `controller.ts`): a peek let go of
-  always goes back, never on, and the renderer draws only what is past the spine, because the
-  rest of that page would be a half-page slab beside the book. The fold's shadows hug its crease,
-  half a page off stage, so the strip drops one of its own on the page under it
-  (`drawPeekShadow`). A press takes it in hand as an ordinary turn, drawn whole, carrying on from
-  the peek. Rejected: no cue on that edge (the original's behaviour, an action without a sign),
-  and a cue that is not paper (a second visual language). `flipProgress` reports a peek at just
-  over a half, which is where that page is.
+- `[settled]` 2026-09-22: **In portrait a turn back is the previous page's turn forward, run
+  backward.** The page coming back lies in the hidden half, so its own fold happens beside the
+  book: the original drew it there, a flat slab floating off the page for the first half of the
+  drag. Run as its forward turn in reverse (`Session.reversed` in `controller.ts`), it starts
+  fully turned and uncurls across the page on show, with the curl and shadows a forward turn has.
+  The pointer holds the crease (the corner is off stage), so the corner travels twice the
+  pointer's travel, and let go past the middle of the page it lands. Its hover cue is the same
+  fold begun: a crease `FURL` px past the spine, leaning toward the pointer like the furl. In
+  portrait the renderer draws only what is over the page on show, since what folds past the spine
+  would float beside the book, and a hard page swings a quarter turn, flat to upright at the
+  spine, since past upright it lies over the hidden half and half its turn would show nothing
+  moving. It casts its own shadow there (`drawHardCastShadow`), darkest at its foot and trailing
+  off its edge: the landscape pair of gradients relies on a page on the far side, and without it
+  the one left is a slab darkest at its far end that sweeps across the page on its own. Landscape
+  keeps the original's. Replaced the peek (that page pulled flat over the spine, with a shadow of its own), which
+  was a second way to draw a page. Rejected: clipping the old back turn to the page (a flat card
+  sliding out from the spine, no curl until late), and opening the spread for a turn back (no room
+  on a phone; the book promises one page).
 - `[settled]` 2026-09-18: **Every binding is the same book seen from another side.**
   `binding: "left" | "right" | "top" | "bottom"`. `right` is a right-to-left book (a manga: the
   spine on the right, the cover alone on the left, a swipe to the right reads on), which is the
@@ -269,6 +274,11 @@ this library. These are the places where it was wrong and we did not copy it:
 - Hovering an edge furls the whole edge, and stays furled anywhere along it, leaning toward the
   pointer. The original lifted the nearer corner and let it follow the pointer. Hover is not
   compared by the parity suite.
+- In portrait a turn back uncurls the previous page across the page on show, and nothing of a
+  turn is drawn beside the book. The original folded that page in from the hidden half, flat and
+  off the page. A hard page swings a quarter turn in portrait, not a half, and casts one shadow
+  that fades from its foot rather than the original's pair. None of this is compared by the
+  parity suite.
 - Shadows default to `shadowOpacity: 0.35` and the turning page has a hairline edge
   (`.opf-page--turning` in `packages/core/src/styles.css`, coloured by `--opf-page-edge`). The
   original's full-strength shadows are a black bar on light paper, and once they are softened a

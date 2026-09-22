@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import {
   Collinear,
   clampToCircle,
-  clipPolygonToMaxX,
+  clipPolygonToMinX,
   intersectLines,
 } from "../src/geometry/point.ts";
 
@@ -53,21 +53,21 @@ test("clampToCircle returns the same object when nothing needs clamping", () => 
   expect(Math.hypot(outside.x, outside.y)).toBeCloseTo(5, 9);
 });
 
-// The renderer draws a peek only where it has come past the spine, so this decides what shows.
-test("clipPolygonToMaxX: keeps the part at or left of the line, and nothing of a polygon that only touches it", () => {
+// In portrait the renderer draws a turning page only where it is over the page on show.
+test("clipPolygonToMinX: keeps the part at or right of the line, and nothing of a polygon that only touches it", () => {
   const square = [
     { x: -10, y: 0 },
     { x: 20, y: 0 },
     { x: 20, y: 30 },
     { x: -10, y: 30 },
   ];
-  expect(clipPolygonToMaxX(square, 0)).toEqual([
-    { x: -10, y: 0 },
+  expect(clipPolygonToMinX(square, 0)).toEqual([
     { x: 0, y: 0 },
+    { x: 20, y: 0 },
+    { x: 20, y: 30 },
     { x: 0, y: 30 },
-    { x: -10, y: 30 },
   ]);
-  expect(clipPolygonToMaxX(square, 50)).toEqual(square);
-  expect(clipPolygonToMaxX(square, -10)).toEqual([]);
-  expect(clipPolygonToMaxX(square, -40)).toEqual([]);
+  expect(clipPolygonToMinX(square, -40)).toEqual(square);
+  expect(clipPolygonToMinX(square, 20)).toEqual([]);
+  expect(clipPolygonToMinX(square, 50)).toEqual([]);
 });

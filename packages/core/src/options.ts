@@ -44,7 +44,7 @@ export type Orientation = (typeof Orientation)[keyof typeof Orientation];
 export const FlipState = {
   /** Nothing in motion. */
   read: "read",
-  /** A hover cue is showing, because the pointer is where a page can be taken hold of: the edge is furled, or the page that turns back peeks in. */
+  /** A hover cue is showing, because the pointer is where a page can be taken hold of: the edge is furled, or the page that turns back has begun to uncurl over the spine. */
   foldCorner: "fold_corner",
   /** The user is dragging a corner. */
   userFold: "user_fold",
@@ -113,7 +113,7 @@ export type BookOptions = {
   readonly swipe?: boolean;
   /** Minimum swipe travel in CSS pixels. @default 30 */
   readonly swipeDistance?: number;
-  /** Show where a page can be taken hold of when the mouse hovers there: the edge furls, leaning toward the pointer, and in a single-page book the page that turns back peeks in over the spine. @default true */
+  /** Show where a page can be taken hold of when the mouse hovers there: the edge furls, leaning toward the pointer, and in a single-page book the page that turns back uncurls a strip over the spine. @default true */
   readonly hover?: boolean;
   /**
    * Pointer events starting on an element matching this selector never start a flip.

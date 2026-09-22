@@ -221,22 +221,8 @@ const scenarios: Scenario[] = [
     stage: PORTRAIT_STAGE,
     drive: drag({ x: 260, y: 60 }, { x: 150, y: 120 }),
   },
-  // Direction is decided by where the drag is, not where it started, as in the original.
-  {
-    name: "portrait-back",
-    stage: PORTRAIT_STAGE,
-    startPage: 2,
-    drive: drag({ x: 40, y: 60 }, { x: 100, y: 120 }),
-  },
-  // A hard page on show is the page that turns: one element, lifting, not the two faces of a
-  // sheet. The stage is one page exactly, so the book is flush with it, where the original places
-  // a hard page right (SPEC.md, deliberate differences).
-  {
-    name: "portrait-cover-forward-hard",
-    stage: PAGE.width,
-    cover: true,
-    drive: drag({ x: 235, y: 60 }, { x: 125, y: 120 }),
-  },
+  // Not compared in portrait: a turn back, which runs as the previous page's turn forward in
+  // reverse, and a hard page, which swings a quarter turn (SPEC.md, deliberate differences).
   // Hover is not compared: the original lifts a corner that follows the pointer, this library
   // furls the edge (SPEC.md, deliberate differences).
 ];

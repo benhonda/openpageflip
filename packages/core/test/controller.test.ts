@@ -165,18 +165,34 @@ describe("FlipController", () => {
   });
 
   test("in portrait the visible page's spine-side edge turns back and its outer edge forward", () => {
-    // 300px container: one 300x420 page, so the edge strip is 103px wide.
-    const { controller } = setup({ startPage: 2 }, 6, { w: 300, h: 420 });
+    // 300px container: one 250x350 page centred in it, from x = 25, so the edge strip is 86px wide.
+    const { controller, progress } = setup({ startPage: 2 }, 6, { w: 300, h: 420 });
     controller.pointerDown({ x: 150, y: 200 });
     controller.pointerUp({ x: 150, y: 200 });
     expect(controller.currentState).toBe(FlipState.read);
     controller.pointerDown({ x: 40, y: 200 });
     controller.pointerUp({ x: 40, y: 200 });
     expect(controller.currentState).toBe(FlipState.flipping);
-    expect(controller.frame().flip?.direction).toBe("back");
+    expect(progress.at(-1)).toMatchObject({ from: 2, to: 1, direction: "back" });
   });
 
-  test("in portrait the page that turns back is off stage, so its cue peeks in over the spine and never turns", () => {
+  test("in portrait the page coming back is its forward turn run backward, laid over the page on show", () => {
+    const { controller, progress, last } = setup({ startPage: 2 }, 6, { w: 300, h: 420 });
+    controller.pointerDown({ x: 40, y: 200 });
+    controller.pointerDrag({ x: 100, y: 200 });
+    // Its fold runs forward, off itself, over the page it is coming back onto; nothing of it lies
+    // in the hidden half. The turn is still back.
+    expect(last()).toMatchObject({
+      right: 1,
+      flip: { direction: "forward", flipping: 1, bottom: 2 },
+    });
+    expect(progress.at(-1)).toMatchObject({ from: 2, to: 1, direction: "back" });
+    // The pointer holds the crease: it has come 60px from where the press took hold.
+    const { top, bottom } = last().flip?.fold.intersections ?? {};
+    expect(Math.abs(((top?.x ?? 0) + (bottom?.x ?? 0)) / 2 - 60)).toBeLessThan(2);
+  });
+
+  test("in portrait the cue for the page coming back uncurls a strip over the spine, and never turns", () => {
     const { controller, manual, progress, shown, last } = setup({ startPage: 2 }, 6, {
       w: 300,
       h: 420,
@@ -184,15 +200,22 @@ describe("FlipController", () => {
     shown.length = 0;
     controller.hover({ x: 40, y: 370 });
     manual.advance(1000);
-    // Past the spine in page space (x < 0) is over the visible page: a strip as wide as a furl is deep.
-    expect(last().flip).toMatchObject({ direction: "back", flipping: 1, peek: true });
-    expect(last().flip?.fold.position.x).toBeCloseTo(-30, 6);
+    // A crease a furl's depth past the spine, leaning toward the pointer near the bottom corner.
+    expect(last()).toMatchObject({ right: 1, flip: { flipping: 1, bottom: 2 } });
+    const { top, bottom } = last().flip?.fold.intersections ?? {};
+    expect(bottom?.x).toBeGreaterThan(top?.x ?? Infinity);
+    expect(Math.abs(((top?.x ?? 0) + (bottom?.x ?? 0)) / 2 - 30)).toBeLessThan(2);
+    // Barely begun, as the page is, and shaded like a turn just begun: its fold is nearly all the
+    // way back, where a forward turn's shadows have faded to nothing.
+    expect(progress.at(-1)).toMatchObject({ from: 2, to: 1, direction: "back" });
+    expect(progress.at(-1)?.progress).toBeLessThan(0.25);
+    expect(last().flip?.shadow?.opacity).toBeGreaterThan(0.25);
 
-    // The kernel counts a corner past the spine as a turn half made. Let go of, a peek still
-    // goes back: leaving the edge, or the book, never turns the page.
+    // Leaving the edge, or the book, lets it curl away again; the page never turns.
     controller.hover({ x: 150, y: 370 });
     manual.advance(1000);
     expect(last().flip).toBeNull();
+    expect(last().right).toBe(2);
     expect(progress.at(-1)?.progress).toBe(0);
     controller.hover({ x: 40, y: 370 });
     manual.advance(1000);
@@ -201,25 +224,36 @@ describe("FlipController", () => {
     expect(controller.page).toBe(2);
     expect(shown).toEqual([]);
 
-    // The outer edge is on stage, so it furls like any other.
+    // The outer edge furls like any other.
     controller.hover({ x: 260, y: 370 });
     manual.advance(1000);
-    expect(last().flip).toMatchObject({ direction: "forward", peek: false });
+    expect(last()).toMatchObject({ right: 2, flip: { direction: "forward", flipping: 2 } });
   });
 
-  test("a press takes a peek in hand: the drag carries on from it as a turn, drawn whole", async () => {
+  test("a press takes that cue in hand: the crease stays under the pointer, and past the middle it turns", () => {
     const { controller, manual, last } = setup({ startPage: 2 }, 6, { w: 300, h: 420 });
+    const crease = () => {
+      const { top, bottom } = last().flip?.fold.intersections ?? {};
+      return ((top?.x ?? 0) + (bottom?.x ?? 0)) / 2;
+    };
     controller.hover({ x: 40, y: 370 });
     manual.advance(1000);
+    const cue = crease();
     controller.pointerDown({ x: 40, y: 370 });
     controller.pointerDrag({ x: 60, y: 370 });
-    expect(last().flip).toMatchObject({ direction: "back", peek: false });
-    expect(last().flip?.fold.position.x).toBeCloseTo(-50, 6);
-    // Pushed back over the spine and let go, it drops back like any drag that stopped short.
-    controller.pointerDrag({ x: -20, y: 370 });
-    controller.pointerUp({ x: -20, y: 370 });
+    expect(Math.abs(crease() - (cue + 20))).toBeLessThan(2);
+    // Short of the middle and let go, it curls away again.
+    controller.pointerDrag({ x: 120, y: 370 });
+    controller.pointerUp({ x: 120, y: 370 });
     manual.advance(2000);
     expect(controller.page).toBe(2);
+    // Past the middle, it lands. The 250px page sits centred in the 300px box, from x = 25, so
+    // its middle is at x = 150.
+    controller.pointerDown({ x: 30, y: 370 });
+    controller.pointerDrag({ x: 180, y: 370 });
+    controller.pointerUp({ x: 180, y: 370 });
+    manual.advance(2000);
+    expect(controller.page).toBe(1);
   });
 
   test("flipTo during a running flip lands it first, then aims from there", async () => {

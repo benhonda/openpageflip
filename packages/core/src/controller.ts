@@ -36,23 +36,26 @@ export type ShadowData = {
   readonly width: number;
   readonly opacity: number;
   readonly direction: FlipDirection;
-  /** 0..200: the original doubled flip progress for its hard-page shadow curve. */
+  /** 0..200: how far round a hard page has swung, doubled as the original's hard-page shadow curve expects. */
   readonly progress: number;
 };
 
 export type FlipFrame = {
+  /**
+   * The direction the fold runs. In portrait a turn back runs forward, as the previous page
+   * turning off itself in reverse, with that page as `flipping` and on show as `Frame.right`.
+   */
   readonly direction: FlipDirection;
   readonly corner: FlipCorner;
   readonly flipping: number;
   /** The page revealed underneath, or `null` when the turn reveals nothing. */
   readonly bottom: number | null;
   readonly fold: Fold;
+  /** How far the fold has come, 0..100, running in `direction`. A turn's own progress is `FlipProgress`. */
   readonly progress: number;
   /** Rotation about the spine for hard pages, in degrees. */
   readonly hardAngle: number;
   readonly shadow: ShadowData | null;
-  /** A hover cue for a page that starts off stage: only what has come past the spine is drawn. */
-  readonly peek: boolean;
 };
 
 /** Where a turn is, between the spread it started from and the spread it leads to. */
@@ -98,12 +101,13 @@ type Session = {
   readonly pageWidth: number;
   readonly pageHeight: number;
   /**
-   * A hover cue for a page that starts off stage: in portrait the page that turns back lies in the
-   * hidden half, where a furl of its far edge would show nothing (or float beside the book). Its
-   * cue is that page peeking in over the spine instead. A peek is never a turn in hand, however
-   * far past the spine the kernel says it is: let go, it always goes back.
+   * A back turn in portrait, played as the previous page's forward turn run backward. The page
+   * coming back starts in the hidden half, so a fold of its own would happen beside the book;
+   * run as its forward turn in reverse, the fold starts fully turned (`home`) and uncurls across
+   * the page on show to rest (`away`). The fold runs forward (`foldDirection`); the turn is still
+   * back, to the pages, events and progress.
    */
-  readonly peek: boolean;
+  readonly reversed: boolean;
   /** Where along the edge a furl's pointer is: 1 at the top, 0 midway, -1 at the bottom. */
   lean: number;
   fold: Fold | null;
@@ -117,12 +121,12 @@ type Session = {
 /** Pointer travel before a press counts as a drag rather than a click. */
 const DRAG_THRESHOLD = 5;
 /**
- * How deep a hovered edge furls: the crease sits this far in from the edge. A peek comes this far
- * past the spine.
+ * How deep a hover cue folds: the crease sits this far in from the edge it is hovering, the page's
+ * outer edge or, for a reversed turn, the spine.
  */
 const FURL = 30;
 /**
- * How far a furl's crease tilts toward the pointer: this much deeper at the end of the edge
+ * How far a hover cue's crease tilts toward the pointer: this much deeper at the end of the edge
  * the pointer is at, as much shallower at the other. Midway along the edge it is parallel.
  */
 const TILT = 15;
@@ -142,6 +146,11 @@ const FULL_FLIP_LENGTH = 1000;
  * snapped its hovered corner the same way.
  */
 const SHORTEST_FLIP = 0.25;
+
+/** The direction a session's fold is computed in: its own, except a reversed turn runs forward. */
+function foldDirection(session: Session): FlipDirection {
+  return session.reversed ? FlipDirection.forward : session.direction;
+}
 
 export class FlipController {
   private pages: PageModel[];
@@ -341,32 +350,30 @@ export class FlipController {
     if (session === null) return Promise.resolve(false);
 
     this.setState(FlipState.flipping);
-    const { pageWidth, pageHeight } = session;
-    const margin = pageHeight / 10;
-    const yStart = session.corner === FlipCorner.bottom ? pageHeight - margin : margin;
-    const yDest = session.corner === FlipCorner.bottom ? pageHeight : 0;
+    const margin = session.pageHeight / 10;
+    const home = this.home(session);
     const heldFold =
       held !== null && held.direction === session.direction && held.corner === session.corner
         ? held.fold
         : null;
-    const from = heldFold?.position ?? { x: pageWidth - margin, y: yStart };
+    const from = heldFold?.position ?? {
+      x: home.x - Math.sign(home.x) * margin,
+      y: session.corner === FlipCorner.bottom ? home.y - margin : margin,
+    };
     this.applyFold(from);
-    return this.animateTo(from, { x: -pageWidth, y: yDest }, true, true);
+    return this.animateTo(from, this.away(session), true, true);
   }
 
   /**
-   * Let go of a fold: a page in hand completes the turn if it crossed the spine, otherwise it
-   * drops back. A peek is not in hand, so it only ever goes back, to the spine it came in over.
+   * Let go of a fold: the turn completes if the corner crossed the spine on its way `away`,
+   * otherwise it drops back `home`.
    */
   private release(): Promise<boolean> {
     const session = this.session;
     if (session === null || session.fold === null) return Promise.resolve(false);
     const pos = session.fold.position;
-    const y = session.corner === FlipCorner.bottom ? session.pageHeight : 0;
-    if (session.peek) return this.animateTo(pos, { x: 0, y }, false, true);
-    return pos.x <= 0
-      ? this.animateTo(pos, { x: -session.pageWidth, y }, true, true)
-      : this.animateTo(pos, { x: session.pageWidth, y }, false, true);
+    const turns = session.reversed ? pos.x >= 0 : pos.x <= 0;
+    return this.animateTo(pos, turns ? this.away(session) : this.home(session), turns, true);
   }
 
   /**
@@ -449,46 +456,62 @@ export class FlipController {
     }
 
     if (!this.isPressable(containerPos)) return;
-    const session = this.start(containerPos, true);
+    const session = this.start(containerPos);
     if (session === null) return;
     this.setState(FlipState.foldCorner);
     session.lean = this.leanAt(containerPos, session);
-    const rest = this.restPoint(session);
-    const from = session.peek ? { x: 0, y: rest.y } : rest;
+    const from = this.startPoint(session);
     this.applyFold(from);
     void this.animateTo(from, () => this.cuePoint(session), false, false);
   }
 
   /** Where along the edge the pointer is, as `Session.lean` counts it. */
   private leanAt(containerPos: Point, session: Session): number {
-    const { y } = containerToPage(containerPos, this.rect, session.direction);
+    const { y } = containerToPage(containerPos, this.rect, foldDirection(session));
     return 1 - 2 * Math.min(1, Math.max(0, y / session.pageHeight));
   }
 
-  /** The corner at rest, nudged in and down by `REST_NUDGE` so the fold is not degenerate. */
-  private restPoint(session: Session): Point {
+  /**
+   * Where the corner is before the turn: at rest on the page's outer edge, or for a reversed turn
+   * fully turned, a page's width past the spine.
+   */
+  private home(session: Session): Point {
+    const x = session.reversed ? -session.pageWidth : session.pageWidth;
+    return { x, y: session.corner === FlipCorner.bottom ? session.pageHeight : 0 };
+  }
+
+  /** Where the corner is once the turn is made: `home` across the spine. */
+  private away(session: Session): Point {
+    const home = this.home(session);
+    return { x: -home.x, y: home.y };
+  }
+
+  /** `home`, nudged in and down by `REST_NUDGE` so the fold is not degenerate. */
+  private startPoint(session: Session): Point {
+    const home = this.home(session);
     const { in: x, down: y } = REST_NUDGE;
     return {
-      x: session.pageWidth - x,
-      y: session.corner === FlipCorner.bottom ? session.pageHeight - y : y,
+      x: home.x - Math.sign(home.x) * x,
+      y: session.corner === FlipCorner.bottom ? home.y - y : y,
     };
   }
 
   /**
-   * Where the corner goes for a hover cue: folded over a crease `FURL` px in from the edge, or
-   * for a peek far enough in that the page shows a `FURL` px strip past the spine. A furl's
-   * crease tilts by the lean, so the fold is deeper at the pointer's end of the edge; a peek's
-   * stays parallel, because its shadow (`drawPeekShadow`) is drawn square to the spine. The
-   * corner is nudged in like the rest point, so the fold is not degenerate when it is parallel.
+   * Where the corner goes for a hover cue: folded over a crease `FURL` px in from the edge being
+   * hovered, so the page furls at its outer edge or, reversed, uncurls a strip over the spine.
+   * The crease tilts by the lean, so the fold is deeper at the pointer's end of the edge. The
+   * corner is nudged in like `startPoint`, so the fold is not degenerate when it is parallel.
    */
   private cuePoint(session: Session): Point {
-    const { pageWidth: w, pageHeight: h, peek } = session;
-    const depth = peek ? (w + FURL) / 2 : FURL;
-    const tilt = peek ? 0 : TILT * session.lean;
+    const { pageWidth: w, pageHeight: h, reversed } = session;
+    const crease = reversed ? FURL : w - FURL;
+    // Deeper means further from the edge: toward the spine for a furl, away from it reversed.
+    const tilt = TILT * session.lean * (reversed ? 1 : -1);
     const bottom = session.corner === FlipCorner.bottom;
+    // The crease folds the corner over from where it rests, which for a reversed turn is `away`.
     const { x, y } = reflect({ x: w, y: bottom ? h : 0 }, [
-      { x: w - depth - tilt, y: 0 },
-      { x: w - depth + tilt, y: h },
+      { x: crease + tilt, y: 0 },
+      { x: crease - tilt, y: h },
     ]);
     return { x, y: y + (bottom ? -REST_NUDGE.down : REST_NUDGE.down) };
   }
@@ -534,22 +557,25 @@ export class FlipController {
       const heldFold = held?.fold ?? null;
       const session = this.start(this.pressStart);
       if (session === null) return;
-      const rest = this.restPoint(session);
+      const start = this.startPoint(session);
       this.dragBase =
         held === null || heldFold === null || held.direction !== session.direction
-          ? rest
+          ? start
           : held.corner === session.corner
             ? heldFold.position
-            : { x: heldFold.position.x, y: rest.y };
+            : { x: heldFold.position.x, y: start.y };
       this.setState(FlipState.userFold);
     }
     const session = this.session;
     if (session === null) return;
-    const from = containerToPage(this.pressStart, this.rect, session.direction);
-    const to = containerToPage(containerPos, this.rect, session.direction);
+    const from = containerToPage(this.pressStart, this.rect, foldDirection(session));
+    const to = containerToPage(containerPos, this.rect, foldDirection(session));
+    // A reversed turn's corner is off stage; what the pointer holds is the crease, which lies
+    // midway between the corner and where it rests, so the corner travels twice as far.
+    const gain = session.reversed ? 2 : 1;
     this.applyFold({
-      x: this.dragBase.x + to.x - from.x,
-      y: this.dragBase.y + to.y - from.y,
+      x: this.dragBase.x + gain * (to.x - from.x),
+      y: this.dragBase.y + gain * (to.y - from.y),
     });
   }
 
@@ -579,8 +605,7 @@ export class FlipController {
     const session = this.session;
     if (session !== null && session.fold !== null) {
       if (session.direction !== direction) return this.release();
-      const y = corner === FlipCorner.bottom ? session.pageHeight : 0;
-      return this.animateTo(session.fold.position, { x: -session.pageWidth, y }, true, true);
+      return this.animateTo(session.fold.position, this.away(session), true, true);
     }
     return direction === FlipDirection.forward ? this.flipNext(corner) : this.flipPrev(corner);
   }
@@ -592,11 +617,8 @@ export class FlipController {
 
   // ---- the flip session -----------------------------------------------------------------------
 
-  /**
-   * Decide direction and corner from where the pointer is, and pick the pages that move. `cue`
-   * says the session is a hover cue rather than a turn.
-   */
-  private start(containerPos: Point, cue = false): Session | null {
+  /** Decide direction and corner from where the pointer is, and pick the pages that move. */
+  private start(containerPos: Point): Session | null {
     this.endSession();
     const bookPos = containerToBook(containerPos, this.rect);
     const direction = this.directionAt(bookPos);
@@ -636,7 +658,7 @@ export class FlipController {
       to: pair.to,
       pageWidth: this.rect.pageWidth,
       pageHeight: this.rect.height,
-      peek: cue && this.orientation === Orientation.portrait && direction === FlipDirection.back,
+      reversed: this.orientation === Orientation.portrait && direction === FlipDirection.back,
       lean: 0,
       fold: null,
       progress: 0,
@@ -666,7 +688,7 @@ export class FlipController {
     const session = this.session;
     if (session === null) return;
     const fold = computeFold({
-      direction: session.direction,
+      direction: foldDirection(session),
       corner: session.corner,
       pageWidth: session.pageWidth,
       pageHeight: session.pageHeight,
@@ -677,17 +699,24 @@ export class FlipController {
     const { progress } = fold;
     session.fold = fold;
     session.progress = progress;
+    // How far round a hard page has swung, 0..100 for flat to flat. In portrait it swings a
+    // quarter turn, flat to upright at the spine: past upright it would lie over the hidden half,
+    // out of sight, and half the turn would show nothing moving.
+    const swing = this.orientation === Orientation.portrait ? progress / 2 : progress;
     session.hardAngle =
-      (session.direction === FlipDirection.forward ? 90 : -90) * ((200 - progress * 2) / 100);
+      (foldDirection(session) === FlipDirection.forward ? 90 : -90) * ((200 - swing * 2) / 100);
+    // Soft shadows grow wider and fainter as the turn goes on, and a reversed turn goes on as its
+    // fold goes back: shaded by the fold, it would start where a forward turn ends, all but bare.
+    const turned = session.reversed ? 100 - progress : progress;
     session.shadow =
       this.options.shadows && fold.shadow !== null
         ? {
             pos: fold.shadow.start,
             angle: fold.shadow.angle,
-            width: ((session.pageWidth * 3) / 4) * (progress / 100),
-            opacity: ((100 - progress) * (100 * this.options.shadowOpacity)) / 100 / 100,
-            direction: session.direction,
-            progress: progress * 2,
+            width: ((session.pageWidth * 3) / 4) * (turned / 100),
+            opacity: ((100 - turned) * (100 * this.options.shadowOpacity)) / 100 / 100,
+            direction: foldDirection(session),
+            progress: swing * 2,
           }
         : null;
     this.render();
@@ -757,24 +786,26 @@ export class FlipController {
 
   frame(): Frame {
     const session = this.session;
+    const folded = session !== null && session.fold !== null ? session : null;
     return {
       rect: this.rect,
       container: this.container,
       orientation: this.orientation,
       left: this.left,
-      right: this.right,
+      // A reversed turn is the page coming back turning forward off itself, so it is the page on
+      // show, with the page it covers underneath.
+      right: folded?.reversed ? folded.flipping : this.right,
       flip:
-        session !== null && session.fold !== null
+        folded !== null && folded.fold !== null
           ? {
-              direction: session.direction,
-              corner: session.corner,
-              flipping: session.flipping,
-              bottom: session.bottom,
-              fold: session.fold,
-              progress: session.progress,
-              hardAngle: session.hardAngle,
-              shadow: session.shadow,
-              peek: session.peek,
+              direction: foldDirection(folded),
+              corner: folded.corner,
+              flipping: folded.flipping,
+              bottom: folded.bottom,
+              fold: folded.fold,
+              progress: folded.progress,
+              hardAngle: folded.hardAngle,
+              shadow: folded.shadow,
             }
           : null,
     };
@@ -802,7 +833,11 @@ export class FlipController {
             from: session.from,
             to: session.to,
             direction: session.direction,
-            progress: session.landed ? 1 : session.progress / 100,
+            progress: session.landed
+              ? 1
+              : session.reversed
+                ? 1 - session.progress / 100
+                : session.progress / 100,
           }
         : null;
     const last = this.reported;
