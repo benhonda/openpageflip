@@ -15,7 +15,7 @@ Both packages are pre-1.0 and under active construction. [`SPEC.md`](SPEC.md) ha
 
 ## Working on it
 
-Requires [Bun](https://bun.com) 1.4+ and [Task](https://taskfile.dev). `task --list` shows every command; `task install` then `task check` runs what CI runs.
+Requires [Bun](https://bun.com) 1.4+ and [Task](https://taskfile.dev). `task --list` shows every command; `task install` then `task check` runs what CI runs. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the rest.
 
 ## License
 
