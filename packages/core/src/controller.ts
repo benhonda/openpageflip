@@ -2,15 +2,16 @@
  * The headless heart of the book: which spread is open, what a pointer is doing to a page, and
  * where the flip animation is. It knows nothing about the DOM; it hands `Frame`s to a renderer.
  * The behaviour (drop thresholds, animation paths) is the original's, so the book feels the
- * same. Two things are ours: hover, click and drag all act on the same zone (see `isHandle`), so
- * the cue never promises what a press would not do; and the cue is the whole edge furling, which
- * a drag then carries on from, moving the fold by the pointer's travel.
+ * same. Three things are ours: hover, click and drag all act on the same zone (see `isHandle`), so
+ * the cue never promises what a press would not do; the cue is the whole edge furling, which a
+ * drag then carries on from, moving the fold by the pointer's travel; and a jump riffles through
+ * the leaves between (see `riffle`) rather than cutting to the last turn.
  */
 import { type Clock, startTween, type Tween } from "./animation.ts";
 import type { Size } from "./axes.ts";
 import { containerToBook, containerToPage } from "./coords.ts";
 import { computeFold, type Fold } from "./geometry/fold.ts";
-import { distance, type Point, reflect } from "./geometry/point.ts";
+import { distance, lerp, type Point, reflect } from "./geometry/point.ts";
 import type { BookRect, LayoutResult } from "./layout.ts";
 import {
   ClickMode,
@@ -42,13 +43,19 @@ export type ShadowData = {
 
 export type FlipFrame = {
   /**
-   * The direction the fold runs. In portrait a turn back runs forward, as the previous page
-   * turning off itself in reverse, with that page as `flipping` and on show as `Frame.right`.
+   * The direction the fold runs. In portrait a turn back runs forward, as the page coming back
+   * turning off itself in reverse, with that page as both `front` and `flipping`.
    */
   readonly direction: FlipDirection;
   readonly corner: FlipCorner;
+  /**
+   * The face the leaf lifts from. Where it has not lifted it lies flat (`fold.flatClip`), over
+   * whatever is under it. In portrait it is also `flipping`: the page lifts away from itself.
+   */
+  readonly front: number;
+  /** The face that comes over: the back of the leaf, seen mid-flip. */
   readonly flipping: number;
-  /** The page revealed underneath, or `null` when the turn reveals nothing. */
+  /** The page the leaf lifts off, or `null` when there is none (a turn onto a page shown alone). */
   readonly bottom: number | null;
   readonly fold: Fold;
   /** How far the fold has come, 0..100, running in `direction`. A turn's own progress is `FlipProgress`. */
@@ -66,9 +73,10 @@ export type FlipProgress = {
   readonly to: number;
   readonly direction: FlipDirection;
   /**
-   * 0 with the page at rest on `from`, 1 with it landed on `to`; in between, how far across the
-   * book the page's corner has come, which for a hard page is how far round it has swung. A turn
-   * always ends on exactly 0 (dropped back, or cut short) or 1.
+   * 0 with the book at rest on `from`, 1 with it landed on `to`; in between, how far across the
+   * book the page's corner has come, which for a hard page is how far round it has swung. A jump
+   * that riffles through several leaves shares the way evenly among them. A turn always ends on
+   * exactly 0 (dropped back, or cut short) or 1.
    */
   readonly progress: number;
 };
@@ -79,9 +87,17 @@ export type Frame = {
   /** The container the rect sits in, as measured on screen. */
   readonly container: Size;
   readonly orientation: Orientation;
+  /**
+   * The pages lying flat under anything in the air: the spread on show, except that the side the
+   * leaves lift from shows the page the lowest of them lifts off.
+   */
   readonly left: number | null;
   readonly right: number | null;
-  readonly flip: FlipFrame | null;
+  /**
+   * The leaves in the air, the one on top first. One for a turn, a furl or a drag; a jump riffles
+   * through several, each lifting before the one above it has landed.
+   */
+  readonly leaves: readonly FlipFrame[];
 };
 
 export type ControllerHooks = {
@@ -91,13 +107,15 @@ export type ControllerHooks = {
   readonly onProgress: (progress: FlipProgress) => void;
 };
 
+/** One leaf in the air, or about to be. */
 type Session = {
   readonly direction: FlipDirection;
   readonly corner: FlipCorner;
+  readonly front: number;
   readonly flipping: number;
   readonly bottom: number | null;
-  readonly from: number;
-  readonly to: number;
+  /** The spread it lands on. */
+  readonly target: number;
   readonly pageWidth: number;
   readonly pageHeight: number;
   /**
@@ -114,8 +132,29 @@ type Session = {
   progress: number;
   hardAngle: number;
   shadow: ShadowData | null;
-  /** The turn reached `to`. The fold cannot say so: where a page lands is a degenerate point. */
-  landed: boolean;
+};
+
+/** A turn as the host sees it: one leaf, or a riffle of several from one spread to another. */
+type Turn = {
+  /** First page of the spread on show when it began. */
+  readonly from: number;
+  /** First page of the spread it leads to. */
+  readonly to: number;
+  readonly direction: FlipDirection;
+  /** How many leaves it turns. */
+  readonly leaves: number;
+  /** How many of them have landed. */
+  landed: number;
+};
+
+/** One leaf's path through an animation: it lifts `delay` ms in and moves for `duration` ms. */
+type Track = {
+  readonly leaf: Session;
+  readonly from: Point;
+  /** Read every frame, so a hover cue can follow the pointer on its way in. */
+  readonly to: () => Point;
+  readonly delay: number;
+  readonly duration: number;
 };
 
 /** Pointer travel before a press counts as a drag rather than a click. */
@@ -146,6 +185,15 @@ const FULL_FLIP_LENGTH = 1000;
  * snapped its hovered corner the same way.
  */
 const SHORTEST_FLIP = 0.25;
+/**
+ * A jump turns at most this many leaves. One further riffles through an even sample of the spreads
+ * it passes, so every leaf shows real pages and a long jump takes no longer than a short one.
+ */
+const RIFFLE_LEAVES = 5;
+/** Each leaf of a riffle takes this share of the time a turn of its own would. */
+const RIFFLE_PACE = 0.6;
+/** How finely a leaf's track is searched for the moment its fold first reaches past the spine. */
+const CROSSING_STEPS = 64;
 
 /** The direction a session's fold is computed in: its own, except a reversed turn runs forward. */
 function foldDirection(session: Session): FlipDirection {
@@ -157,6 +205,8 @@ export class FlipController {
   private spreads: readonly Spread[] = [];
   private spreadIndex = 0;
   private currentPage = 0;
+  /** The page the host was last told about; a turn tells it once, when it is over. */
+  private announcedPage = 0;
   private orientation: Orientation;
   private rect: BookRect;
   private container: Size;
@@ -164,7 +214,9 @@ export class FlipController {
   private right: number | null = null;
 
   private state: FlipState = FlipState.read;
-  private session: Session | null = null;
+  private turn: Turn | null = null;
+  /** The leaves of the turn in the air, in the order they lift. */
+  private leaves: Session[] = [];
   private tween: Tween | null = null;
   /** Settles the promise of the running animation when it is cut short. */
   private settleTween: ((turned: boolean) => void) | null = null;
@@ -215,8 +267,13 @@ export class FlipController {
     return this.rect;
   }
 
+  /** The leaf a pointer works on. Only an animated jump has more than one in the air. */
+  private get session(): Session | null {
+    return this.leaves[0] ?? null;
+  }
+
   setPages(pages: PageModel[]): void {
-    this.endSession();
+    this.drop();
     this.pages = pages;
     this.rebuildSpreads();
     this.showPage(Math.min(this.currentPage, Math.max(0, pages.length - 1)));
@@ -230,13 +287,13 @@ export class FlipController {
     this.container = layout.container;
     const orientationChanged = layout.orientation !== this.orientation;
     // A fold is computed for one page size; when that changes mid-flip the fold is dropped.
-    if (resized && !orientationChanged) this.endSession();
+    if (resized && !orientationChanged) this.drop();
     if (orientationChanged) {
-      this.endSession();
+      this.drop();
       this.orientation = layout.orientation;
       this.rebuildSpreads();
     }
-    this.showPage(this.currentPage);
+    this.show(this.currentPage);
     return orientationChanged;
   }
 
@@ -248,16 +305,56 @@ export class FlipController {
     );
     this.spreads = spreads;
     for (const [index, page] of this.pages.entries()) {
-      if (hardByPosition.has(index)) {
-        page.density = PageDensity.hard;
-        page.drawingDensity = PageDensity.hard;
+      if (hardByPosition.has(index)) page.density = PageDensity.hard;
+    }
+    this.syncDrawingDensity();
+  }
+
+  /**
+   * A soft page backing a hard one turns as a hard sheet while its leaf is in the air, so the two
+   * faces move as one. Every other page is drawn as what it is.
+   */
+  private syncDrawingDensity(): void {
+    for (const page of this.pages) page.drawingDensity = page.density;
+    if (this.orientation !== Orientation.landscape) return;
+    for (const leaf of this.leaves) {
+      const front = this.pages[leaf.front];
+      const flipping = this.pages[leaf.flipping];
+      if (front !== undefined && flipping !== undefined && front.density !== flipping.density) {
+        front.drawingDensity = PageDensity.hard;
+        flipping.drawingDensity = PageDensity.hard;
       }
     }
   }
 
   // ---- navigation without animation ---------------------------------------------------------
 
+  /** An instant turn: whatever is in the air is dropped, and the spread holding `page` shown. */
   showPage(page: number): void {
+    this.drop();
+    this.show(page);
+  }
+
+  showNext(): void {
+    if (this.spreadIndex >= this.spreads.length - 1) return;
+    this.drop();
+    this.spreadIndex++;
+    this.showSpread();
+  }
+
+  showPrev(): void {
+    if (this.spreadIndex <= 0) return;
+    this.drop();
+    this.spreadIndex--;
+    this.showSpread();
+  }
+
+  private drop(): void {
+    this.endTurn();
+    this.setState(FlipState.read);
+  }
+
+  private show(page: number): void {
     const index = spreadIndexOfPage(this.spreads, page);
     if (index === null) {
       throw new RangeError(
@@ -268,21 +365,15 @@ export class FlipController {
     this.showSpread();
   }
 
-  showNext(): void {
-    if (this.spreadIndex < this.spreads.length - 1) {
-      this.spreadIndex++;
-      this.showSpread();
-    }
-  }
-
-  showPrev(): void {
-    if (this.spreadIndex > 0) {
-      this.spreadIndex--;
-      this.showSpread();
-    }
-  }
-
   private showSpread(): void {
+    this.placeSpread();
+    this.render();
+    // A turn tells the host once it is over; a relayout or redraw of the same spread tells nothing.
+    if (this.turn === null) this.announce();
+  }
+
+  /** Lay the spread at `spreadIndex` flat, without drawing it. */
+  private placeSpread(): void {
     const { left, right } = staticPages(
       this.spreads,
       this.orientation,
@@ -292,76 +383,123 @@ export class FlipController {
     this.left = left;
     this.right = right;
     const spread = this.spreads[this.spreadIndex];
-    const page = spread === undefined ? this.currentPage : spread[0];
-    const changed = page !== this.currentPage;
-    this.currentPage = page;
-    this.render();
-    // Relayouts and redraws re-show the same spread; only a real change is a flip.
-    if (changed) this.hooks.onPage(page);
+    if (spread !== undefined) this.currentPage = spread[0];
+  }
+
+  private announce(): void {
+    if (this.currentPage === this.announcedPage) return;
+    this.announcedPage = this.currentPage;
+    this.hooks.onPage(this.currentPage);
   }
 
   // ---- animated flips -----------------------------------------------------------------------
 
   flipNext(corner: FlipCorner): Promise<boolean> {
-    return this.flipFrom({
-      x: this.rect.left + this.rect.pageWidth * 2 - 10,
-      y: corner === FlipCorner.top ? 1 : this.rect.height - 2,
-    });
+    return this.flipBy(1, corner);
   }
 
   flipPrev(corner: FlipCorner): Promise<boolean> {
-    return this.flipFrom({
-      x: this.rect.left + 10,
-      y: corner === FlipCorner.top ? 1 : this.rect.height - 2,
-    });
+    return this.flipBy(-1, corner);
   }
 
   /**
-   * Jumps to the spread beside the target without animation, then animates the last turn.
-   * The static pages keep showing the current spread until that turn lands.
+   * Turns to the spread holding `page`. Beside it, that is one turn; further away, the leaves
+   * riffle, each lifting as the one above it is halfway over (see `riffle`).
    */
   flipTo(page: number, corner: FlipCorner): Promise<boolean> {
     // A running flip lands first, so the target is measured from where the book actually is.
     this.tween?.finish();
     const target = spreadIndexOfPage(this.spreads, page);
-    if (target === null || target === this.spreadIndex) return Promise.resolve(false);
-    if (target > this.spreadIndex) {
-      this.spreadIndex = target - 1;
-      this.syncCurrentPage();
-      return this.flipNext(corner);
-    }
-    this.spreadIndex = target + 1;
-    this.syncCurrentPage();
-    return this.flipPrev(corner);
+    if (target === null) return Promise.resolve(false);
+    return this.riffle(target, corner);
   }
 
-  private syncCurrentPage(): void {
-    const spread = this.spreads[this.spreadIndex];
-    if (spread !== undefined) this.currentPage = spread[0];
-  }
-
-  /** Full animated flip starting at a container point, as a click would. */
-  private flipFrom(containerPos: Point): Promise<boolean> {
+  private flipBy(step: 1 | -1, corner: FlipCorner): Promise<boolean> {
     // A furl under the pointer lands, and the flip carries on from it. A running flip lands too,
-    // which ends its session, so the new flip starts from the settled book.
-    if (this.session !== null) this.tween?.finish();
-    const held = this.session;
-    const session = this.start(containerPos);
-    if (session === null) return Promise.resolve(false);
+    // which ends its turn, so the new flip starts from the settled book.
+    this.tween?.finish();
+    return this.riffle(this.spreadIndex + step, corner);
+  }
 
-    this.setState(FlipState.flipping);
-    const margin = session.pageHeight / 10;
-    const home = this.home(session);
+  /**
+   * Animates the leaves from the spread on show to `target`: one, or up to `RIFFLE_LEAVES`
+   * turning between an even sample of the spreads passed. Leaves are timed so that each one's
+   * fold reaches past the spine just as the leaf above it lands: the one above covers it until
+   * then, and a leaf lies on top once it is down, so neither ever shows through the other.
+   */
+  private riffle(target: number, corner: FlipCorner): Promise<boolean> {
+    const start = this.spreadIndex;
+    const passed = Math.abs(target - start);
+    if (passed === 0) return Promise.resolve(false);
+    const step = Math.sign(target - start);
+    const direction = step > 0 ? FlipDirection.forward : FlipDirection.back;
+    const count = Math.min(passed, RIFFLE_LEAVES);
+    const stops = Array.from(
+      { length: count + 1 },
+      (_, i) => start + step * Math.round((i * passed) / count),
+    );
+    const leaves: Session[] = [];
+    for (const [i, from] of stops.slice(0, -1).entries()) {
+      const leaf = this.leaf(direction, corner, from, stops[i + 1] ?? target);
+      if (leaf === null) return Promise.resolve(false);
+      leaves.push(leaf);
+    }
+    const to = this.spreads[target]?.[0];
+    if (to === undefined) return Promise.resolve(false);
+
+    const held = this.session;
     const heldFold =
-      held !== null && held.direction === session.direction && held.corner === session.corner
-        ? held.fold
-        : null;
-    const from = heldFold?.position ?? {
-      x: home.x - Math.sign(home.x) * margin,
-      y: session.corner === FlipCorner.bottom ? home.y - margin : margin,
-    };
-    this.applyFold(from);
-    return this.animateTo(from, this.away(session), true, true);
+      held !== null && held.direction === direction && held.corner === corner ? held.fold : null;
+    this.endTurn();
+    this.turn = { from: this.currentPage, to, direction, leaves: count, landed: 0 };
+    this.setState(FlipState.flipping);
+
+    const pace = count > 1 ? RIFFLE_PACE : 1;
+    const tracks: Track[] = [];
+    for (const [i, leaf] of leaves.entries()) {
+      const from = (i === 0 ? heldFold?.position : undefined) ?? this.liftPoint(leaf);
+      const away = this.away(leaf);
+      const duration = this.durationOf(from, away) * pace;
+      const above = tracks.at(-1);
+      const delay =
+        above === undefined
+          ? 0
+          : Math.max(
+              above.delay,
+              above.delay + above.duration - duration * this.crossing(leaf, from, away),
+            );
+      tracks.push({ leaf, from, to: () => away, delay, duration });
+    }
+    return this.animate(tracks, true, true);
+  }
+
+  /**
+   * How far into a leaf's track, as a share of its duration, its fold can go without reaching past
+   * the spine: the last step searched before it does. Run as a forward turn: a portrait turn back
+   * is the same track the other way, and in portrait only the page on show is drawn, so its
+   * timing borrows the forward turn's.
+   */
+  private crossing(leaf: Session, from: Point, to: Point): number {
+    const forward = leaf.reversed ? { from: to, to: from } : { from, to };
+    for (let i = 1; i < CROSSING_STEPS; i++) {
+      const fold = computeFold({
+        direction: foldDirection(leaf),
+        corner: leaf.corner,
+        pageWidth: leaf.pageWidth,
+        pageHeight: leaf.pageHeight,
+        point: lerp(forward.from, forward.to, this.options.easing(i / CROSSING_STEPS)),
+      });
+      if (fold?.flippingClip.some((p) => p.x < 0)) return (i - 1) / CROSSING_STEPS;
+    }
+    return 1;
+  }
+
+  /** How long a corner takes from `from` to `to`: `flipDuration` for a full path, less for a short one. */
+  private durationOf(from: Point, to: Point): number {
+    const length = Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y));
+    return (
+      Math.max(SHORTEST_FLIP, Math.min(1, length / FULL_FLIP_LENGTH)) * this.options.flipDuration
+    );
   }
 
   /**
@@ -373,50 +511,66 @@ export class FlipController {
     if (session === null || session.fold === null) return Promise.resolve(false);
     const pos = session.fold.position;
     const turns = session.reversed ? pos.x >= 0 : pos.x <= 0;
-    return this.animateTo(pos, turns ? this.away(session) : this.home(session), turns, true);
+    return this.settle(session, pos, turns ? this.away(session) : this.home(session), turns);
+  }
+
+  /** Carry one leaf from `from` to `to`, and end its turn there. */
+  private settle(session: Session, from: Point, to: Point, turns: boolean): Promise<boolean> {
+    return this.animate(
+      [{ leaf: session, from, to: () => to, delay: 0, duration: this.durationOf(from, to) }],
+      turns,
+      true,
+    );
   }
 
   /**
-   * Resolves with whether the page turned. A cancelled animation resolves with `false`. A `to`
-   * function is read every frame, so a hover cue can follow the pointer on its way in.
+   * Runs the tracks as one animation. Resolves with whether the turn was made; a cancelled
+   * animation resolves with `false`. With `turn`, each leaf lands where its track ends; with
+   * `reset`, the turn is over when the last track ends.
    */
-  private animateTo(
-    from: Point,
-    to: Point | (() => Point),
-    turn: boolean,
-    reset: boolean,
-  ): Promise<boolean> {
+  private animate(tracks: readonly Track[], turn: boolean, reset: boolean): Promise<boolean> {
     this.tween?.finish();
-    const target = typeof to === "function" ? to : () => to;
-    const initial = target();
-    const length = Math.max(Math.abs(initial.x - from.x), Math.abs(initial.y - from.y));
-    const duration =
-      Math.max(SHORTEST_FLIP, Math.min(1, length / FULL_FLIP_LENGTH)) * this.options.flipDuration;
+    const total = Math.max(0, ...tracks.map((track) => track.delay + track.duration));
+    const landed = new Set<Track>();
+
+    const step = (elapsed: number): void => {
+      for (const track of tracks) {
+        if (landed.has(track) || elapsed < track.delay) continue;
+        if (!this.leaves.includes(track.leaf)) this.lift(track.leaf);
+        const t = track.duration <= 0 ? 1 : Math.min(1, (elapsed - track.delay) / track.duration);
+        this.bend(track.leaf, lerp(track.from, track.to(), t >= 1 ? 1 : this.options.easing(t)));
+        if (t >= 1 && turn) {
+          landed.add(track);
+          this.land(track.leaf);
+        }
+      }
+      this.render();
+    };
+
+    // A leaf that starts at once is shown where it starts before the first frame comes round.
+    const starting = tracks.filter((track) => track.delay === 0 && track.leaf.fold === null);
+    for (const track of starting) {
+      if (!this.leaves.includes(track.leaf)) this.lift(track.leaf);
+      this.bend(track.leaf, track.from);
+    }
+    if (starting.length > 0) this.render();
 
     return new Promise((resolve) => {
       this.settleTween = resolve;
       this.tween = startTween(this.clock, {
-        duration,
-        easing: this.options.easing,
-        onFrame: (t) => {
-          const { x, y } = target();
-          this.applyFold({ x: from.x + (x - from.x) * t, y: from.y + (y - from.y) * t });
-        },
+        duration: total,
+        easing: (t) => t,
+        onFrame: (t) => step(t * total),
         onEnd: () => {
           this.tween = null;
           this.settleTween = null;
-          const session = this.session;
-          if (session === null) {
+          if (this.turn === null) {
             resolve(false);
             return;
           }
-          if (turn) {
-            session.landed = true;
-            if (session.direction === FlipDirection.back) this.showPrev();
-            else this.showNext();
-          }
           if (reset) {
-            this.endSession();
+            this.endTurn();
+            this.announce();
             this.setState(FlipState.read);
             this.render();
           }
@@ -424,6 +578,20 @@ export class FlipController {
         },
       });
     });
+  }
+
+  private lift(leaf: Session): void {
+    this.leaves.push(leaf);
+    this.syncDrawingDensity();
+  }
+
+  /** The leaf is down on the spread it leads to, which now lies flat under the rest. */
+  private land(leaf: Session): void {
+    this.leaves = this.leaves.filter((other) => other !== leaf);
+    if (this.turn !== null) this.turn.landed++;
+    this.spreadIndex = leaf.target;
+    this.placeSpread();
+    this.syncDrawingDensity();
   }
 
   // ---- pointer interaction --------------------------------------------------------------------
@@ -442,7 +610,7 @@ export class FlipController {
       if (held) {
         if (this.state !== FlipState.foldCorner) return;
         current.lean = this.leanAt(containerPos, current);
-        if (this.tween === null) this.applyFold(this.cuePoint(current));
+        if (this.tween === null) this.applyFold(current, this.cuePoint(current));
         return;
       }
       if (this.state === FlipState.foldCorner) {
@@ -461,8 +629,19 @@ export class FlipController {
     this.setState(FlipState.foldCorner);
     session.lean = this.leanAt(containerPos, session);
     const from = this.startPoint(session);
-    this.applyFold(from);
-    void this.animateTo(from, () => this.cuePoint(session), false, false);
+    void this.animate(
+      [
+        {
+          leaf: session,
+          from,
+          to: () => this.cuePoint(session),
+          delay: 0,
+          duration: this.durationOf(from, this.cuePoint(session)),
+        },
+      ],
+      false,
+      false,
+    );
   }
 
   /** Where along the edge the pointer is, as `Session.lean` counts it. */
@@ -488,11 +667,21 @@ export class FlipController {
 
   /** `home`, nudged in and down by `REST_NUDGE` so the fold is not degenerate. */
   private startPoint(session: Session): Point {
+    return this.inFromHome(session, REST_NUDGE.in, REST_NUDGE.down);
+  }
+
+  /** Where an animated turn picks the corner up: a tenth of the page's height in from `home`. */
+  private liftPoint(session: Session): Point {
+    const margin = session.pageHeight / 10;
+    return this.inFromHome(session, margin, margin);
+  }
+
+  /** `home`, moved `across` toward the spine and `down` the edge from its corner. */
+  private inFromHome(session: Session, across: number, down: number): Point {
     const home = this.home(session);
-    const { in: x, down: y } = REST_NUDGE;
     return {
-      x: home.x - Math.sign(home.x) * x,
-      y: session.corner === FlipCorner.bottom ? home.y - y : y,
+      x: home.x - Math.sign(home.x) * across,
+      y: session.corner === FlipCorner.bottom ? home.y - down : down,
     };
   }
 
@@ -573,7 +762,7 @@ export class FlipController {
     // A reversed turn's corner is off stage; what the pointer holds is the crease, which lies
     // midway between the corner and where it rests, so the corner travels twice as far.
     const gain = session.reversed ? 2 : 1;
-    this.applyFold({
+    this.applyFold(session, {
       x: this.dragBase.x + gain * (to.x - from.x),
       y: this.dragBase.y + gain * (to.y - from.y),
     });
@@ -605,57 +794,50 @@ export class FlipController {
     const session = this.session;
     if (session !== null && session.fold !== null) {
       if (session.direction !== direction) return this.release();
-      return this.animateTo(session.fold.position, this.away(session), true, true);
+      return this.settle(session, session.fold.position, this.away(session), true);
     }
     return direction === FlipDirection.forward ? this.flipNext(corner) : this.flipPrev(corner);
   }
 
   private click(containerPos: Point): void {
     if (this.options.click === ClickMode.off || !this.isHandle(containerPos)) return;
-    void this.flipFrom(containerPos);
+    const bookPos = containerToBook(containerPos, this.rect);
+    const step = this.directionAt(bookPos) === FlipDirection.forward ? 1 : -1;
+    void this.flipBy(step, this.cornerAt(bookPos));
   }
 
   // ---- the flip session -----------------------------------------------------------------------
 
-  /** Decide direction and corner from where the pointer is, and pick the pages that move. */
+  /** A turn of one leaf toward the side the pointer is on, from the corner it is nearer. */
   private start(containerPos: Point): Session | null {
-    this.endSession();
+    this.endTurn();
     const bookPos = containerToBook(containerPos, this.rect);
     const direction = this.directionAt(bookPos);
-    const corner = this.cornerAt(bookPos);
+    const target = this.spreadIndex + (direction === FlipDirection.forward ? 1 : -1);
+    const to = this.spreads[target]?.[0];
+    const leaf = this.leaf(direction, this.cornerAt(bookPos), this.spreadIndex, target);
+    if (leaf === null || to === undefined) return null;
+    this.turn = { from: this.currentPage, to, direction, leaves: 1, landed: 0 };
+    this.lift(leaf);
+    return leaf;
+  }
 
-    const canFlip =
-      direction === FlipDirection.forward
-        ? this.currentPage < this.pages.length - 1
-        : this.currentPage >= 1;
-    if (!canFlip) return null;
-
-    const pair = flipPages(this.spreads, this.orientation, this.spreadIndex, direction);
-    if (pair === null) return null;
-
-    // A soft page beside a hard one turns as a hard sheet for this flip, so the two move as one.
-    if (this.orientation === Orientation.landscape) {
-      const flipping = this.pages[pair.flipping];
-      const neighbour =
-        this.pages[direction === FlipDirection.back ? pair.flipping + 1 : pair.flipping - 1];
-      if (
-        flipping !== undefined &&
-        neighbour !== undefined &&
-        flipping.density !== neighbour.density
-      ) {
-        flipping.drawingDensity = PageDensity.hard;
-        neighbour.drawingDensity = PageDensity.hard;
-      }
-    }
-
-    this.session = {
+  /** The leaf that turns from spread `from` to spread `to`, not yet in the air. */
+  private leaf(
+    direction: FlipDirection,
+    corner: FlipCorner,
+    from: number,
+    to: number,
+  ): Session | null {
+    const pages = flipPages(this.spreads, this.orientation, this.pages.length, from, to);
+    if (pages === null) return null;
+    return {
       direction,
       corner,
-      flipping: pair.flipping,
-      bottom: pair.bottom,
-      // The spread on show, which `flipTo` leaves in place while it jumps beside its target.
-      from: this.left ?? this.right ?? this.currentPage,
-      to: pair.to,
+      front: pages.front,
+      flipping: pages.flipping,
+      bottom: pages.bottom,
+      target: to,
       pageWidth: this.rect.pageWidth,
       pageHeight: this.rect.height,
       reversed: this.orientation === Orientation.portrait && direction === FlipDirection.back,
@@ -664,9 +846,7 @@ export class FlipController {
       progress: 0,
       hardAngle: 0,
       shadow: null,
-      landed: false,
     };
-    return this.session;
   }
 
   /** Stop the running animation where it is, settling its promise with "did not turn". */
@@ -677,16 +857,22 @@ export class FlipController {
     this.settleTween = null;
   }
 
-  private endSession(): void {
+  /** Drop whatever is in the air. Leaves that landed stay down; whoever shows the book next tells the host. */
+  private endTurn(): void {
     this.stopTween();
-    this.session = null;
-    for (const page of this.pages) page.drawingDensity = page.density;
+    this.leaves = [];
+    this.turn = null;
+    this.syncDrawingDensity();
   }
 
-  /** Move the lifted corner to a page-space point. Degenerate points keep the previous fold. */
-  private applyFold(pagePos: Point): void {
-    const session = this.session;
-    if (session === null) return;
+  /** Move a leaf's corner to a page-space point and draw it. */
+  private applyFold(leaf: Session, pagePos: Point): void {
+    this.bend(leaf, pagePos);
+    this.render();
+  }
+
+  /** Move a leaf's corner to a page-space point. Degenerate points keep the previous fold. */
+  private bend(session: Session, pagePos: Point): void {
     const fold = computeFold({
       direction: foldDirection(session),
       corner: session.corner,
@@ -719,7 +905,6 @@ export class FlipController {
             progress: swing * 2,
           }
         : null;
-    this.render();
   }
 
   private directionAt(bookPos: Point): FlipDirection {
@@ -785,29 +970,36 @@ export class FlipController {
   // ---- output -----------------------------------------------------------------------------------
 
   frame(): Frame {
-    const session = this.session;
-    const folded = session !== null && session.fold !== null ? session : null;
+    const inAir = this.leaves.flatMap((leaf) =>
+      leaf.fold === null ? [] : [{ leaf, fold: leaf.fold }],
+    );
+    // The leaf that lifted first is on top: it covers the ones after it until it is down. A
+    // reversed riffle is a forward one run backward, so there the last to lift is on top.
+    const onTop = inAir[0]?.leaf.reversed ? inAir.toReversed() : inAir;
+    const lowest = onTop.at(-1)?.leaf;
+    const liftsFrom =
+      lowest === undefined
+        ? null
+        : foldDirection(lowest) === FlipDirection.forward
+          ? "right"
+          : "left";
     return {
       rect: this.rect,
       container: this.container,
       orientation: this.orientation,
-      left: this.left,
-      // A reversed turn is the page coming back turning forward off itself, so it is the page on
-      // show, with the page it covers underneath.
-      right: folded?.reversed ? folded.flipping : this.right,
-      flip:
-        folded !== null && folded.fold !== null
-          ? {
-              direction: foldDirection(folded),
-              corner: folded.corner,
-              flipping: folded.flipping,
-              bottom: folded.bottom,
-              fold: folded.fold,
-              progress: folded.progress,
-              hardAngle: folded.hardAngle,
-              shadow: folded.shadow,
-            }
-          : null,
+      left: liftsFrom === "left" ? (lowest?.bottom ?? null) : this.left,
+      right: liftsFrom === "right" ? (lowest?.bottom ?? null) : this.right,
+      leaves: onTop.map(({ leaf, fold }) => ({
+        direction: foldDirection(leaf),
+        corner: leaf.corner,
+        front: leaf.front,
+        flipping: leaf.flipping,
+        bottom: leaf.bottom,
+        fold,
+        progress: leaf.progress,
+        hardAngle: leaf.hardAngle,
+        shadow: leaf.shadow,
+      })),
     };
   }
 
@@ -826,18 +1018,20 @@ export class FlipController {
    * turn under way, and a turn whose fold is gone without landing is back at rest.
    */
   private reportProgress(): void {
-    const session = this.session;
+    const turn = this.turn;
+    const inAir = this.leaves.filter((leaf) => leaf.fold !== null);
     const now: FlipProgress | null =
-      session !== null && session.fold !== null
+      turn !== null && (inAir.length > 0 || turn.landed > 0)
         ? {
-            from: session.from,
-            to: session.to,
-            direction: session.direction,
-            progress: session.landed
-              ? 1
-              : session.reversed
-                ? 1 - session.progress / 100
-                : session.progress / 100,
+            from: turn.from,
+            to: turn.to,
+            direction: turn.direction,
+            progress:
+              inAir.reduce(
+                (sum, leaf) =>
+                  sum + (leaf.reversed ? 1 - leaf.progress / 100 : leaf.progress / 100),
+                turn.landed,
+              ) / turn.leaves,
           }
         : null;
     const last = this.reported;
@@ -858,7 +1052,7 @@ export class FlipController {
   }
 
   destroy(): void {
-    this.endSession();
+    this.endTurn();
     // Nothing is drawn again, so a turn that was under way is closed here.
     this.reportProgress();
   }

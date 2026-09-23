@@ -84,6 +84,25 @@ closed by design.
   was a second way to draw a page. Rejected: clipping the old back turn to the page (a flat card
   sliding out from the spine, no curl until late), and opening the spread for a turn back (no room
   on a phone; the book promises one page).
+- `[settled]` 2026-09-22: **A jump riffles through the pages between.** `flipTo` further than
+  the next spread turns up to `RIFFLE_LEAVES` (5) leaves, each between an even sample of the
+  spreads passed, so every face shown is a real page; the original cut to the spread beside the
+  target and animated only the last turn. Several leaves are in the air at once, so the renderer
+  draws a list (`Frame.leaves`, top first), each leaf in its own stacking band with its own
+  shadows. Each soft leaf draws its front where it still lies flat (`Fold.flatClip`) over the page
+  the lowest leaf lifts off, instead of the page underneath cut to what the fold reveals: that is
+  plain painter's order for any mix of soft and hard leaves, where cutting a hard board to a soft
+  leaf's crease is not possible. The two agree for a single leaf, held by the parity suite. The
+  earlier leaf lies on top until it lands and under the rest once it has, so each leaf is timed
+  to reach past the spine only as the one above it lands (`riffle` and `crossing` in
+  `controller.ts`, held by "no leaf reaches past the spine while one above it is in the air" in
+  `packages/core/test/controller.test.ts`); that leaves about two in the air at once. To the host
+  it is one turn: `flipProgress` runs once from 0 to 1 across the whole jump and `flip` fires once
+  on landing, since a controlled `page` prop fed intermediate pages would re-aim the jump.
+  Rejected: quick single turns in a row (reads as tapping "next"), one thick block of pages
+  turning (a look nothing else in the book has, wrong for short jumps), and more leaves in the air
+  at once, which needs each leaf split at the spine so the half past it can stack the other way,
+  and a second copy of each page to do it.
 - `[settled]` 2026-09-18: **Every binding is the same book seen from another side.**
   `binding: "left" | "right" | "top" | "bottom"`. `right` is a right-to-left book (a manga: the
   spine on the right, the cover alone on the left, a swipe to the right reads on), which is the
@@ -285,6 +304,9 @@ this library. These are the places where it was wrong and we did not copy it:
   white page over a white page loses its free edge, which no shadow ever marked. This is a look,
   not geometry: the parity suite pins ours to the original's look (`mountOurs` in
   `packages/core/test/visual/harness.ts`).
+- `flipTo` riffles through the pages between, not a silent jump to the spread beside the target
+  and one turn from there; `flip` fires once for the whole jump. The parity suite compares single
+  turns only.
 - `flipPrev` aims at the book's left edge, not the container's (StPageFlip #29 / PR #30).
 - Hard pages and hard shadows are placed from the book rect, so they are right when the book is
   not flush with its container's top-left.

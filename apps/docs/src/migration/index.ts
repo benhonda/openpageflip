@@ -114,7 +114,10 @@ export const methods: Readonly<Record<PageFlipMethod, MovedMethod>> = {
     note: "Resolves when the turn lands, with false when there was nothing to turn to.",
   },
   flipPrev: { to: "flipPrev", note: "Same promise as flipNext." },
-  flip: { to: "flipTo", note: "Same promise as flipNext." },
+  flip: {
+    to: "flipTo",
+    note: "Same promise as flipNext. A jump riffles through the pages between rather than cutting to the last turn, and fires flip once, when it lands.",
+  },
   getPageCount: { property: "pageCount" },
   getCurrentPageIndex: { property: "page" },
   getOrientation: { property: "orientation" },

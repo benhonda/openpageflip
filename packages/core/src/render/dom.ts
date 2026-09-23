@@ -8,10 +8,10 @@
  */
 
 import { type Axes, axesFor, isVertical, type ScreenSide } from "../axes.ts";
-import type { Frame, ShadowData } from "../controller.ts";
+import type { FlipFrame, Frame, ShadowData } from "../controller.ts";
 import { pageToContainer } from "../coords.ts";
 import type { Point } from "../geometry/point.ts";
-import { clipPolygonToMinX, rotatePoint } from "../geometry/point.ts";
+import { clipPolygonToHalfPlane, rotatePoint } from "../geometry/point.ts";
 import type { BookRect } from "../layout.ts";
 import {
   type Binding,
@@ -24,14 +24,29 @@ import {
 } from "../options.ts";
 import type { PageModel } from "../pages.ts";
 
-const Z = {
-  flat: 1,
-  bottom: 3,
-  hardShadow: 4,
-  flipping: 5,
-  hardInnerShadow: 5,
-  shadow: 10,
+/**
+ * Stacking. The pages lying flat are at the bottom, with the one a hard leaf lifts off `under` it
+ * raised above the other. Each leaf in the air gets a band of `LAYER` above them, the one on top
+ * highest.
+ */
+const Z = { flat: 1, under: 2 } as const;
+/** A leaf's layers, in the order it draws them within its band. */
+const LAYER = {
+  /** A soft leaf's front, where it still lies flat. */
+  front: 0,
+  hardShadow: 1,
+  /** The faces in the air: a soft leaf's flap, a hard leaf's board. */
+  turning: 2,
+  hardInnerShadow: 2,
+  shadow: 3,
 } as const;
+const BAND = 4;
+type Layer = keyof typeof LAYER;
+
+/** The z-index of a layer in the band of the leaf `below` others from the top of `count`. */
+function zIndex(layer: Layer, below: number, count: number): string {
+  return String(Z.under + 1 + (count - 1 - below) * BAND + LAYER[layer]);
+}
 
 const CLASS = {
   book: "opf-book",
@@ -49,8 +64,9 @@ const CLASS = {
 } as const;
 
 type Side = "left" | "right";
-/** A page off the flat: the one `turning`, or the one `bottom` it uncovers. Names its `Z` entry. */
-type Layer = "flipping" | "bottom";
+/** What a page is doing, as its classes say: lying flat (all or in part), or in the air. */
+type Pose = "flat" | "turning";
+type Shadows = Record<"outer" | "inner" | "hardOuter" | "hardInner", HTMLDivElement>;
 
 /**
  * The inline properties this renderer owns on a page element. Every draw sets all of them
@@ -91,14 +107,15 @@ function clipPath(points: readonly Point[]): string {
 type Saved = { readonly cssText: string; readonly className: string };
 
 export class DomRenderer {
-  private readonly shadows: Record<"outer" | "inner" | "hardOuter" | "hardInner", HTMLDivElement>;
+  /** One set of shadows per leaf in the air, made as they are first needed and kept. */
+  private readonly shadows: Shadows[] = [];
   private pages: readonly PageModel[] = [];
   private saved = new Map<HTMLElement, Saved>();
   /**
-   * In portrait a page lifts away from itself: the flat page stays and a mirrored copy folds
-   * over it. The copy is inert, has no ids, and lives only for the duration of the flip.
+   * In portrait a page lifts away from itself: its flat part stays and a mirrored copy folds over
+   * it. A copy is inert, has no ids, and lives only while its leaf is in the air.
    */
-  private clone: { readonly source: HTMLElement; readonly element: HTMLElement } | null = null;
+  private clones = new Map<HTMLElement, HTMLElement>();
   /** Pages currently hidden inline. A page is hidden once when it leaves the stage, not every frame. */
   private hidden = new Set<number>();
 
@@ -112,20 +129,30 @@ export class DomRenderer {
     this.options = options;
     this.axes = axesFor(options.binding, { width: 0, height: 0 });
     container.classList.add(CLASS.book, CLASS.bound(options.binding));
+    // The first set goes in now, ahead of any page appended later, as it always has.
+    this.shadowsFor(0);
+    this.applyContainerSizing();
+  }
+
+  /** The shadows of the leaf `index` from the top. */
+  private shadowsFor(index: number): Shadows {
+    const existing = this.shadows[index];
+    if (existing !== undefined) return existing;
     const shadow = (name: string): HTMLDivElement => {
       const el = document.createElement("div");
       el.className = `${CLASS.shadow} ${CLASS.shadow}--${name}`;
       el.style.display = "none";
-      container.append(el);
+      this.container.append(el);
       return el;
     };
-    this.shadows = {
+    const made: Shadows = {
       outer: shadow("outer"),
       inner: shadow("inner"),
       hardOuter: shadow("hard-outer"),
       hardInner: shadow("hard-inner"),
     };
-    this.applyContainerSizing();
+    this.shadows.push(made);
+    return made;
   }
 
   setPages(pages: readonly PageModel[]): void {
@@ -170,12 +197,11 @@ export class DomRenderer {
   }
 
   render(frame: Frame): void {
-    const { rect, flip } = frame;
+    const { rect, leaves } = frame;
     this.axes = axesFor(this.options.binding, frame.container);
     const active = new Set<number>();
-    for (const index of [frame.left, frame.right, flip?.flipping, flip?.bottom]) {
-      if (index !== undefined && index !== null) active.add(index);
-    }
+    for (const index of [frame.left, frame.right]) if (index !== null) active.add(index);
+    for (const leaf of leaves) active.add(leaf.front).add(leaf.flipping);
     // Inline, because a page's own stylesheet (display: flex, say) would beat the class rule.
     for (const [index, page] of this.pages.entries()) {
       if (active.has(index)) {
@@ -187,105 +213,120 @@ export class DomRenderer {
       }
     }
 
-    const flippingHard =
-      flip !== null && this.pages[flip.flipping]?.drawingDensity === PageDensity.hard;
-
+    // Under a hard leaf, the page it lifts off lies over the page beside it, where two bordered
+    // pages overlap at the spine, as the original drew it; under a soft one the right page does.
+    const lowest = leaves.at(-1);
+    const raised: Side | null =
+      lowest === undefined || this.pages[lowest.flipping]?.drawingDensity !== PageDensity.hard
+        ? null
+        : lowest.direction === FlipDirection.forward
+          ? "right"
+          : "left";
     if (frame.orientation !== Orientation.portrait && frame.left !== null) {
-      if (flip !== null && flip.direction === FlipDirection.back && flippingHard) {
-        this.drawHard(frame.left, "left", 180 + flip.hardAngle, "flipping", rect);
-      } else {
-        this.drawFlat(frame.left, "left", rect);
-      }
+      this.drawFlat(frame.left, "left", rect, raised === "left" ? Z.under : Z.flat);
     }
     if (frame.right !== null) {
-      if (flip !== null && flip.direction === FlipDirection.forward && flippingHard) {
-        this.drawHard(frame.right, "right", 180 + flip.hardAngle, "flipping", rect);
-      } else {
-        this.drawFlat(frame.right, "right", rect);
-      }
+      this.drawFlat(frame.right, "right", rect, raised === "right" ? Z.under : Z.flat);
     }
 
-    if (flip === null) {
-      this.dropClone();
-      this.hideShadows();
-      return;
+    const cloned = new Set<HTMLElement>();
+    for (const [below, leaf] of leaves.entries()) {
+      const source = this.drawLeaf(leaf, below, frame);
+      if (source !== null) cloned.add(source);
     }
-    // In portrait a page turning forward is the page on show. A soft one folds over itself as a
-    // copy; a hard one has already been drawn lifting, above, and has no second face to draw.
-    const isPageOnShow = flip.flipping === frame.right;
-    const liftsFromItself = !flippingHard && isPageOnShow;
-    if (!liftsFromItself) this.dropClone();
-
-    if (flip.bottom !== null) {
-      const bottomSide: Side = flip.direction === FlipDirection.back ? "left" : "right";
-      if (flippingHard) {
-        this.drawHard(flip.bottom, bottomSide, 0, "bottom", rect);
-      } else {
-        this.drawSoft(
-          flip.bottom,
-          bottomSide,
-          flip.fold.bottomClip,
-          flip.fold.bottomPagePosition,
-          0,
-          flip.direction,
-          "bottom",
-          rect,
-        );
-      }
+    for (const [source, clone] of this.clones) {
+      if (cloned.has(source)) continue;
+      clone.remove();
+      this.clones.delete(source);
     }
+    for (const shadows of this.shadows.slice(leaves.length)) {
+      this.hideSoftShadows(shadows);
+      this.hideHardShadows(shadows);
+    }
+  }
 
+  /**
+   * One leaf in the air, in the band `below` others from the top. A soft leaf is its front where
+   * it still lies flat and its flap folded over; a hard one is a board swinging about the spine,
+   * the front face up until it passes upright and the back face after. Returns the page it
+   * copied, if it lifts away from itself.
+   */
+  private drawLeaf(leaf: FlipFrame, below: number, frame: Frame): HTMLElement | null {
+    const { rect, orientation } = frame;
+    const count = frame.leaves.length;
+    const shadows = this.shadowsFor(below);
+    const hard = this.pages[leaf.flipping]?.drawingDensity === PageDensity.hard;
+    const portrait = orientation === Orientation.portrait;
     // In portrait every turn runs forward (a back turn is reversed, see `Session` in
     // `controller.ts`), and only the page on show, x >= 0 in its page space, is on stage: what
     // folds past the spine would float beside the book.
     const onStage = (points: readonly Point[]): readonly Point[] =>
-      frame.orientation === Orientation.portrait ? clipPolygonToMinX(points, 0) : points;
-
+      portrait ? clipPolygonToHalfPlane(points, { x: 1, y: 0 }, 0) : points;
+    const frontSide: Side = leaf.direction === FlipDirection.forward ? "right" : "left";
     const flippingSide: Side =
-      flip.direction === FlipDirection.forward && frame.orientation !== Orientation.portrait
-        ? "left"
-        : "right";
-    if (flippingHard) {
-      if (!isPageOnShow) {
-        this.drawHard(flip.flipping, flippingSide, flip.hardAngle, "flipping", rect);
+      leaf.direction === FlipDirection.forward && !portrait ? "left" : "right";
+    // In portrait the page lifts away from itself: a hard one has only the one face to swing, and
+    // a soft one folds over as a copy.
+    const liftsFromItself = leaf.front === leaf.flipping;
+    const band = (layer: Layer): string => zIndex(layer, below, count);
+
+    if (hard) {
+      this.drawHard(leaf.front, frontSide, 180 + leaf.hardAngle, band("turning"), rect);
+      if (!liftsFromItself) {
+        this.drawHard(leaf.flipping, flippingSide, leaf.hardAngle, band("turning"), rect);
       }
     } else {
       this.drawSoft(
-        flip.flipping,
+        leaf.front,
+        frontSide,
+        leaf.fold.flatClip,
+        leaf.fold.bottomPagePosition,
+        0,
+        leaf.direction,
+        { pose: "flat", zIndex: band("front") },
+        rect,
+      );
+      this.drawSoft(
+        leaf.flipping,
         flippingSide,
-        onStage(flip.fold.flippingClip),
-        flip.fold.activeCorner,
-        flip.fold.angle,
-        flip.direction,
-        "flipping",
+        onStage(leaf.fold.flippingClip),
+        leaf.fold.activeCorner,
+        leaf.fold.angle,
+        leaf.direction,
+        { pose: "turning", zIndex: band("turning") },
         rect,
         liftsFromItself,
       );
     }
 
-    if (flip.shadow === null) {
-      this.hideShadows();
-    } else if (flippingHard && frame.orientation === Orientation.portrait) {
-      this.hideSoftShadows();
-      this.drawHardCastShadow(flip.shadow, rect);
-    } else if (flippingHard) {
-      this.hideSoftShadows();
+    if (leaf.shadow === null) {
+      this.hideSoftShadows(shadows);
+      this.hideHardShadows(shadows);
+    } else if (hard && portrait) {
+      this.hideSoftShadows(shadows);
+      this.drawHardCastShadow(shadows, leaf.shadow, rect, band("hardShadow"));
+    } else if (hard) {
+      this.hideSoftShadows(shadows);
       // A hard page's shadow needs a page to fall on, and either side can be bare: a cover opens
       // onto the empty side of the stage and closes away from it, and so does the lone last page.
       // The original painted the shadow on the bare background.
-      const landing = flip.direction === FlipDirection.forward ? frame.left : frame.right;
-      this.drawHardShadows(flip.shadow, rect, {
+      const landing = leaf.direction === FlipDirection.forward ? frame.left : frame.right;
+      this.drawHardShadows(shadows, leaf.shadow, rect, band, {
         landing: landing !== null,
-        lifting: flip.bottom !== null,
+        lifting: leaf.bottom !== null,
       });
     } else {
-      this.hideHardShadows();
-      const { topLeft, topRight, bottomRight, bottomLeft } = flip.fold.rect;
+      this.hideHardShadows(shadows);
+      const { topLeft, topRight, bottomRight, bottomLeft } = leaf.fold.rect;
       this.drawSoftShadows(
-        flip.shadow,
+        shadows,
+        leaf.shadow,
         onStage([topLeft, topRight, bottomRight, bottomLeft]),
         rect,
+        band("shadow"),
       );
     }
+    return liftsFromItself && !hard ? (this.pages[leaf.flipping]?.element ?? null) : null;
   }
 
   // ---- pages ----------------------------------------------------------------------------------
@@ -308,8 +349,8 @@ export class DomRenderer {
   }
 
   private cloneOf(source: HTMLElement): HTMLElement {
-    if (this.clone?.source === source) return this.clone.element;
-    this.dropClone();
+    const existing = this.clones.get(source);
+    if (existing !== undefined) return existing;
     const element = source.cloneNode(true);
     if (!(element instanceof HTMLElement))
       throw new TypeError("@openpageflip/core: a page clone is not an element");
@@ -319,13 +360,8 @@ export class DomRenderer {
     element.inert = true;
     element.dataset["opfClone"] = "";
     source.after(element);
-    this.clone = { source, element };
+    this.clones.set(source, element);
     return element;
-  }
-
-  private dropClone(): void {
-    this.clone?.element.remove();
-    this.clone = null;
   }
 
   /** A page's box on screen. */
@@ -364,7 +400,7 @@ export class DomRenderer {
     return `to ${this.axes.side(bookSide)}`;
   }
 
-  private drawFlat(index: number, side: Side, rect: BookRect): void {
+  private drawFlat(index: number, side: Side, rect: BookRect, zIndex: number): void {
     const el = this.element(index, side);
     if (el === null) return;
     el.classList.add(CLASS.flat);
@@ -380,7 +416,7 @@ export class DomRenderer {
       ...this.pageSize(rect),
       left: `${at.x}px`,
       top: `${at.y}px`,
-      zIndex: String(Z.flat),
+      zIndex: String(zIndex),
     });
   }
 
@@ -391,14 +427,14 @@ export class DomRenderer {
     position: Point,
     angle: number,
     direction: FlipDirection,
-    layer: Layer,
+    place: { readonly pose: Pose; readonly zIndex: string },
     rect: BookRect,
     asClone = false,
   ): void {
     const el = this.element(index, side, asClone);
     if (el === null) return;
-    el.classList.remove(CLASS.flat);
-    el.classList.toggle(CLASS.turning, layer === "flipping");
+    el.classList.toggle(CLASS.flat, place.pose === "flat");
+    el.classList.toggle(CLASS.turning, place.pose === "turning");
     const at = this.placement(
       pageToContainer(position, rect, direction),
       { x: 0, y: 0 },
@@ -416,7 +452,7 @@ export class DomRenderer {
     applyPageStyle(el, {
       position: "absolute",
       display: "block",
-      zIndex: String(Z[layer]),
+      zIndex: place.zIndex,
       left: "0",
       top: "0",
       ...this.pageSize(rect),
@@ -426,11 +462,12 @@ export class DomRenderer {
     });
   }
 
-  private drawHard(index: number, side: Side, angle: number, layer: Layer, rect: BookRect): void {
+  /** A board swinging about the spine, in the air. */
+  private drawHard(index: number, side: Side, angle: number, zIndex: string, rect: BookRect): void {
     const el = this.element(index, side);
     if (el === null) return;
     el.classList.remove(CLASS.flat);
-    el.classList.toggle(CLASS.turning, layer === "flipping");
+    el.classList.add(CLASS.turning);
     const spine = rect.left + rect.width / 2;
     // A page turns about its spine edge: the left page's right edge, the right page's left edge.
     const at = this.placement(
@@ -441,7 +478,7 @@ export class DomRenderer {
     applyPageStyle(el, {
       position: "absolute",
       display: "block",
-      zIndex: String(Z[layer]),
+      zIndex,
       left: "0",
       top: "0",
       ...this.pageSize(rect),
@@ -455,7 +492,13 @@ export class DomRenderer {
   // ---- shadows --------------------------------------------------------------------------------
 
   /** `flipping` is the part of the turning page the inner shadow may fall on. */
-  private drawSoftShadows(shadow: ShadowData, flipping: readonly Point[], rect: BookRect): void {
+  private drawSoftShadows(
+    shadows: Shadows,
+    shadow: ShadowData,
+    flipping: readonly Point[],
+    rect: BookRect,
+    zIndex: string,
+  ): void {
     const forward = shadow.direction === FlipDirection.forward;
     const at = pageToContainer(shadow.pos, rect, shadow.direction);
     const angle = shadow.angle + (3 * Math.PI) / 2;
@@ -478,10 +521,10 @@ export class DomRenderer {
         }),
       );
       const to = this.placement({ x: at.x - origin.x, y: at.y - origin.y }, origin, width);
-      return `display: block; z-index: ${Z.shadow}; width: ${size.width}px; height: ${size.height}px; background: linear-gradient(${gradient}); transform-origin: ${to.origin.x}px ${to.origin.y}px; transform: translate3d(${to.translate.x}px, ${to.translate.y}px, 0) rotate(${this.axes.angle(angle)}rad); clip-path: ${clip};`;
+      return `display: block; z-index: ${zIndex}; width: ${size.width}px; height: ${size.height}px; background: linear-gradient(${gradient}); transform-origin: ${to.origin.x}px ${to.origin.y}px; transform: translate3d(${to.translate.x}px, ${to.translate.y}px, 0) rotate(${this.axes.angle(angle)}rad); clip-path: ${clip};`;
     };
 
-    this.shadows.outer.style.cssText = place(
+    shadows.outer.style.cssText = place(
       shadow.width,
       forward ? 0 : shadow.width,
       [
@@ -494,7 +537,7 @@ export class DomRenderer {
     );
 
     const innerWidth = (shadow.width * 3) / 4;
-    this.shadows.inner.style.cssText = place(
+    shadows.inner.style.cssText = place(
       innerWidth,
       forward ? innerWidth : 0,
       flipping,
@@ -509,8 +552,10 @@ export class DomRenderer {
    * shadow; the gradient that would sit on a bare side stays hidden.
    */
   private drawHardShadows(
+    shadows: Shadows,
     shadow: ShadowData,
     rect: BookRect,
+    band: (layer: "hardShadow" | "hardInnerShadow") => string,
     hasPage: { readonly landing: boolean; readonly lifting: boolean },
   ): void {
     const progress = shadow.progress > 100 ? 200 - shadow.progress : shadow.progress;
@@ -525,11 +570,11 @@ export class DomRenderer {
     const box = this.axes.size({ width: size, height: rect.height });
     const at = this.placement({ x: spine, y: rect.top }, { x: 0, y: 0 }, size);
     const common = `display: block; width: ${box.width}px; height: ${box.height}px; left: ${at.translate.x}px; top: ${at.translate.y}px; transform-origin: ${at.origin.x}px ${at.origin.y}px;`;
-    this.shadows.hardInner.style.cssText = showInner
-      ? `${common} z-index: ${Z.hardInnerShadow}; background: linear-gradient(${this.toward("right")}, rgba(0, 0, 0, ${(shadow.opacity * progress) / 100}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? "" : ` ${this.spin(180)}`};`
+    shadows.hardInner.style.cssText = showInner
+      ? `${common} z-index: ${band("hardInnerShadow")}; background: linear-gradient(${this.toward("right")}, rgba(0, 0, 0, ${(shadow.opacity * progress) / 100}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? "" : ` ${this.spin(180)}`};`
       : "display: none";
-    this.shadows.hardOuter.style.cssText = showOuter
-      ? `${common} z-index: ${Z.hardShadow}; background: linear-gradient(${this.toward("left")}, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? ` ${this.spin(180)}` : ""};`
+    shadows.hardOuter.style.cssText = showOuter
+      ? `${common} z-index: ${band("hardShadow")}; background: linear-gradient(${this.toward("left")}, rgba(0, 0, 0, ${shadow.opacity}) 5%, rgba(0, 0, 0, 0) 100%); transform: translate3d(0, 0, 0)${flipped ? ` ${this.spin(180)}` : ""};`
       : "display: none";
   }
 
@@ -541,28 +586,29 @@ export class DomRenderer {
    * higher it stands. The board covers what lies under it, so what shows trails off its edge and
    * fades as it lies flat.
    */
-  private drawHardCastShadow(shadow: ShadowData, rect: BookRect): void {
-    this.shadows.hardInner.style.cssText = "display: none";
+  private drawHardCastShadow(
+    shadows: Shadows,
+    shadow: ShadowData,
+    rect: BookRect,
+    zIndex: string,
+  ): void {
+    shadows.hardInner.style.cssText = "display: none";
     // Portrait swings a quarter turn: `progress` 0..100 is flat to upright.
     const lift = (Math.min(100, shadow.progress) / 100) * (Math.PI / 2);
     const reach = rect.pageWidth * Math.cos(lift) + (rect.pageWidth / 3) * Math.sin(lift);
     const spine = rect.left + rect.width / 2;
     const box = this.axes.size({ width: reach, height: rect.height });
     const at = this.placement({ x: spine, y: rect.top }, { x: 0, y: 0 }, reach).translate;
-    this.shadows.hardOuter.style.cssText = `display: block; z-index: ${Z.hardShadow}; width: ${box.width}px; height: ${box.height}px; left: ${at.x}px; top: ${at.y}px; background: linear-gradient(${this.toward("right")}, rgba(0, 0, 0, ${shadow.opacity}), rgba(0, 0, 0, 0));`;
+    shadows.hardOuter.style.cssText = `display: block; z-index: ${zIndex}; width: ${box.width}px; height: ${box.height}px; left: ${at.x}px; top: ${at.y}px; background: linear-gradient(${this.toward("right")}, rgba(0, 0, 0, ${shadow.opacity}), rgba(0, 0, 0, 0));`;
   }
 
-  private hideSoftShadows(): void {
-    this.shadows.outer.style.cssText = "display: none";
-    this.shadows.inner.style.cssText = "display: none";
+  private hideSoftShadows(shadows: Shadows): void {
+    shadows.outer.style.cssText = "display: none";
+    shadows.inner.style.cssText = "display: none";
   }
-  private hideHardShadows(): void {
-    this.shadows.hardOuter.style.cssText = "display: none";
-    this.shadows.hardInner.style.cssText = "display: none";
-  }
-  private hideShadows(): void {
-    this.hideSoftShadows();
-    this.hideHardShadows();
+  private hideHardShadows(shadows: Shadows): void {
+    shadows.hardOuter.style.cssText = "display: none";
+    shadows.hardInner.style.cssText = "display: none";
   }
 
   // ---- teardown -------------------------------------------------------------------------------
@@ -577,11 +623,13 @@ export class DomRenderer {
 
   /** Put the container and every page back the way they were found. */
   destroy(): void {
-    this.dropClone();
+    for (const clone of this.clones.values()) clone.remove();
+    this.clones.clear();
     this.hidden.clear();
     for (const page of this.pages) this.restore(page.element);
     this.pages = [];
-    for (const el of Object.values(this.shadows)) el.remove();
+    for (const shadows of this.shadows) for (const el of Object.values(shadows)) el.remove();
+    this.shadows.length = 0;
     this.container.classList.remove(CLASS.book, CLASS.bound(this.options.binding));
     const style = this.container.style;
     style.width = "";
