@@ -15,37 +15,34 @@ Both packages are pre-1.0 and under active construction. [`SPEC.md`](SPEC.md) ha
 
 ## Features
 
-### From StPageFlip and react-pageflip
+The page turn itself is StPageFlip's, right down to the fold geometry, and the test suite holds ours to the original pixel for pixel. Most of what's new comes straight out of the issues people filed on the original repos over the years.
 
-The page turn itself is StPageFlip's, right down to the fold geometry, and the test suite holds ours to the original pixel for pixel. So what it did, this still does:
-
-- Soft pages that curl along the fold, and hard pages (covers, boards) that swing as one stiff sheet
-- Turn a page by dragging it, clicking it, or swiping on a touch screen
-- Shadows that move with the fold
-- A two-page spread that drops to one page when the container gets narrow
-- A fixed size, or stretch to fill the container
-- Covers, where the first and last pages stand alone
-- Pages are plain HTML, so whatever's on them keeps working
-- Methods to flip or jump to a page, and events for when it happens
-- A React component where every child is a page (that part is react-pageflip's)
-
-### New in OpenPageFlip
-
-Most of these come straight out of the issues people filed on the original repos over the years:
-
-- Four bindings: left, right-to-left (manga style), and top or bottom for a notepad or wall calendar
-- `layout: "single"` keeps the book on one page at a time, whatever the width
-- Hovering a page's edge furls it, and clicks and drags start from that same edge, so the middle of the page stays yours for selecting text and clicking links
-- A `flipProgress` event every frame, for moving your own things in step with a turn
-- `flipNext`, `flipPrev` and `flipTo` return a promise that resolves when the page lands
-- Pages can be swapped without rebuilding the book, and in React props and children can change without a remount
-- Safe to server-render - nothing touches `window` at import
-- Pointer Events and `touch-action`, so the page around the book still scrolls on a phone
-- Respects `prefers-reduced-motion`
-- Works inside a container you've scaled or zoomed with CSS
-- `destroy()` stops the frame loop and hands your DOM back the way it found it
-- Frames are only drawn when something moves, so an idle book costs nothing
-- Strict TypeScript types in the package, and React 19 bindings
+| | StPageFlip / react-pageflip | OpenPageFlip |
+| --- | :---: | :---: |
+| Soft pages that curl, hard pages that swing stiff | ✓ | ✓ |
+| Turn by drag, click or swipe | ✓ | ✓ |
+| Shadows that move with the fold | ✓ | ✓ |
+| Spread that drops to one page when narrow | ✓ | ✓ |
+| Fixed size, or stretch to the container | ✓ | ✓ |
+| Covers that stand alone | ✓ | ✓ |
+| Pages are plain HTML | ✓ | ✓ |
+| Swap pages in place | ✓ | ✓ |
+| React component | ✓ | ✓ React 19 |
+| Canvas mode for image books | ✓ | - (an `<img>` on each page) |
+| Hover cue | Corner lifts | Whole edge furls, leaning toward the pointer |
+| Click and drag only from the edge, so text selects and links click | - | ✓ |
+| Right-to-left, top and bottom bindings | - | ✓ |
+| One page at a time at any width (`layout: "single"`) | - | ✓ |
+| `flipProgress` event on every frame | - | ✓ |
+| Flip methods return a promise that resolves on landing | - | ✓ |
+| React props and children change without a remount | - | ✓ |
+| Safe to server-render | - | ✓ |
+| Page around the book still scrolls on touch | Behind a flag | ✓ |
+| Respects `prefers-reduced-motion` | - | ✓ |
+| Works in a container scaled with CSS | - | ✓ |
+| `destroy()` stops the loop and restores your DOM | - | ✓ |
+| Nothing drawn while the book is idle | - | ✓ |
+| Strict TypeScript types, every option optional | - | ✓ |
 
 A handful of things behave differently from the original on purpose. [`SPEC.md`](SPEC.md) lists them with the reasons, and the migration guide on the docs site maps every old option and method to its new name.
 
