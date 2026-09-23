@@ -425,69 +425,6 @@ describe("options that switch behaviour off or change the layout", () => {
     expect(document.elementFromPoint(bounds.left + 150, bounds.top + 200)).toBe(pages[0]);
   });
 
-  test("a jump riffles: leaves in the air together, the first on top, each shaded; all put away as it lands", async () => {
-    const s = stage(500, 20);
-    const book = createBook(s.container, { width: 250, height: 350, flipDuration: 400 });
-    cleanup.push(() => {
-      book.destroy();
-      s.stage.remove();
-    });
-    const turning = () => s.pages.filter((p) => p.classList.contains("opf-page--turning"));
-    const shaded = () =>
-      [...s.container.querySelectorAll<HTMLElement>(".opf-shadow--outer")].filter(
-        (el) => el.style.display !== "none",
-      );
-    let done = false;
-    const turned = book.flipTo(18).then((v) => {
-      done = true;
-      return v;
-    });
-    let together = false;
-    while (!done) {
-      const [above, under] = turning();
-      if (above !== undefined && under !== undefined) {
-        together = true;
-        // Pages come in book order, so the earlier leaf's back is first, and it lies on top.
-        expect(Number(above.style.zIndex)).toBeGreaterThan(Number(under.style.zIndex));
-        expect(shaded()).toHaveLength(2);
-      }
-      await frames(1);
-    }
-    expect(together).toBe(true);
-    expect(await turned).toBe(true);
-    expect(book.page).toBe(18);
-    expect(turning()).toEqual([]);
-    expect(shaded()).toEqual([]);
-  });
-
-  test("a single-page book riffles too, and every copy of a page lifting from itself is removed", async () => {
-    const s = stage(300, 12);
-    const book = createBook(s.container, {
-      width: 250,
-      height: 350,
-      layout: "single",
-      flipDuration: 400,
-    });
-    cleanup.push(() => {
-      book.destroy();
-      s.stage.remove();
-    });
-    const clones = () => s.container.querySelectorAll("[data-opf-clone]").length;
-    let done = false;
-    const turned = book.flipTo(8).then((v) => {
-      done = true;
-      return v;
-    });
-    let most = 0;
-    while (!done) {
-      most = Math.max(most, clones());
-      await frames(1);
-    }
-    expect(await turned).toBe(true);
-    expect(most).toBeGreaterThan(1);
-    expect(clones()).toBe(0);
-  });
-
   test("a single-page book's page coming back uncurls over the page on show, never beside the book", async () => {
     const s = stage(900);
     s.container.style.marginLeft = "300px";

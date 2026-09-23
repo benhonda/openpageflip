@@ -1,4 +1,4 @@
-import { Orientation } from "./options.ts";
+import { FlipDirection, Orientation } from "./options.ts";
 
 /** Page indices shown together. Landscape pairs them; portrait shows one at a time. */
 export type Spread = readonly [number] | readonly [number, number];
@@ -51,46 +51,29 @@ export function staticPages(
   return { left: null, right: spread[0] };
 }
 
-/** The pages one leaf shows as it turns from one spread to another. */
-export type LeafPages = {
-  /** The face it lifts from, lying on the side it leaves. */
-  readonly front: number;
-  /** The face that comes over (the back of the leaf, seen mid-flip). */
-  readonly flipping: number;
-  /** The page revealed underneath it, or `null` when the turn reveals nothing: a turn onto a page shown alone. */
-  readonly bottom: number | null;
-  /** First page of the spread the turn leads to. */
-  readonly to: number;
-};
-
 /**
- * The leaf that turns from spread `from` to spread `to`. Neighbouring spreads make the book's
- * own leaf; spreads further apart make a leaf with a face from each, so a riffle can show a
- * sample of the pages it passes. `null` when either spread is missing or they are the same.
+ * The page that lifts (its back face is what the viewer sees mid-flip), the page revealed
+ * underneath it (`null` when the turn reveals nothing: a turn onto a page shown alone), and the
+ * first page of the spread the turn leads `to`. `null` when there is no spread in that direction.
  */
 export function flipPages(
   spreads: readonly Spread[],
   orientation: Orientation,
-  pageCount: number,
-  from: number,
-  to: number,
-): LeafPages | null {
-  const current = spreads[from];
-  const target = spreads[to];
-  if (current === undefined || target === undefined || from === to) return null;
-  const forward = to > from;
-  const first = target[0];
+  spreadIndex: number,
+  direction: FlipDirection,
+): { flipping: number; bottom: number | null; to: number } | null {
+  const forward = direction === FlipDirection.forward;
+  const target = spreads[forward ? spreadIndex + 1 : spreadIndex - 1];
+  if (target === undefined) return null;
+  const to = target[0];
   if (orientation === Orientation.portrait) {
-    // Portrait shows the current page lifting away, or the page coming back over it.
-    return forward
-      ? { front: current[0], flipping: current[0], bottom: first, to: first }
-      : { front: first, flipping: first, bottom: current[0], to: first };
+    const current = spreads[spreadIndex]?.[0];
+    if (current === undefined) return null;
+    // Portrait shows the current page lifting away, or the previous page coming back over it.
+    return forward ? { flipping: current, bottom: to, to } : { flipping: to, bottom: current, to };
   }
-  const { left, right } = staticPages(spreads, orientation, from, pageCount);
-  const front = forward ? right : left;
-  if (front === null) return null;
-  if (target.length === 1) return { front, flipping: first, bottom: null, to: first };
+  if (target.length === 1) return { flipping: to, bottom: null, to };
   return forward
-    ? { front, flipping: target[0], bottom: target[1], to: first }
-    : { front, flipping: target[1], bottom: target[0], to: first };
+    ? { flipping: target[0], bottom: target[1], to }
+    : { flipping: target[1], bottom: target[0], to };
 }

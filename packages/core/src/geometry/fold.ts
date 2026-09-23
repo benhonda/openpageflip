@@ -12,7 +12,6 @@ import {
   angleBetweenLines,
   Collinear,
   clampToCircle,
-  clipPolygonToHalfPlane,
   distance,
   intersectLinesWithin,
   type Point,
@@ -52,15 +51,8 @@ export type Fold = {
   readonly flippingClip: readonly Point[];
   /** Part of the page underneath that the fold reveals. */
   readonly bottomClip: readonly Point[];
-  /**
-   * Part of the lifting page that still lies flat: across the crease from the lifted corner, so
-   * within the page it is the page less `bottomClip`. It reaches past the page's outer edges, so a
-   * border drawn outside its box goes with it.
-   */
-  readonly flatClip: readonly Point[];
   /** Where the flipping page's own origin corner sits. */
   readonly activeCorner: Point;
-  /** Where a page lying flat on the lifting side has its origin: the lifting page, or the one under it. */
   readonly bottomPagePosition: Point;
   /** Drop-shadow origin and rotation, or `null` when the fold crosses no usable edges. */
   readonly shadow: { readonly start: Point; readonly angle: number } | null;
@@ -109,31 +101,6 @@ export function computeFold(input: FoldInput): Fold | null {
   if (bottom) bottomClip.push(bottom);
   if (top) bottomClip.push(top);
 
-  // The rest of the page: across the crease from the lifted corner. Ours; the original never drew
-  // the lifting page cut to its flat part, only the page underneath cut to what the fold reveals.
-  // It reaches a page's size past the page's outer edges, so what a page draws outside its box (a
-  // border) stays with it where it lies flat; at the spine it stops, where the page beside it
-  // overlaps it as when both lie flat.
-  const [from, to] = [top ?? side, bottom ?? side];
-  let flatClip: readonly Point[] = [];
-  if (from !== null && to !== null) {
-    const lifted = { x: pageWidth, y: corner === FlipCorner.top ? 0 : pageHeight };
-    const normal = { x: from.y - to.y, y: to.x - from.x };
-    const sign = normal.x * (lifted.x - from.x) + normal.y * (lifted.y - from.y) > 0 ? -1 : 1;
-    const inward = { x: sign * normal.x, y: sign * normal.y };
-    const reach = Math.max(pageWidth, pageHeight);
-    flatClip = clipPolygonToHalfPlane(
-      [
-        { x: 0, y: -reach },
-        { x: pageWidth + reach, y: -reach },
-        { x: pageWidth + reach, y: pageHeight + reach },
-        { x: 0, y: pageHeight + reach },
-      ],
-      inward,
-      inward.x * from.x + inward.y * from.y,
-    );
-  }
-
   const shadowStart = corner === FlipCorner.top ? top : (side ?? top);
   const shadowEnd = shadowStart !== side && side !== null ? side : bottom;
   let shadow: Fold["shadow"] = null;
@@ -159,7 +126,6 @@ export function computeFold(input: FoldInput): Fold | null {
     intersections,
     flippingClip,
     bottomClip,
-    flatClip,
     activeCorner: direction === FlipDirection.forward ? rect.topLeft : rect.topRight,
     bottomPagePosition: direction === FlipDirection.back ? { x: pageWidth, y: 0 } : { x: 0, y: 0 },
     shadow,

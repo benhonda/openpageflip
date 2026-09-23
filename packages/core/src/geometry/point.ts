@@ -30,11 +30,6 @@ export function distance(a: Point, b: Point): number {
   return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 }
 
-/** The point `t` of the way from `a` to `b`. */
-export function lerp(a: Point, b: Point, t: number): Point {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-}
-
 /** A point mirrored across the line through a segment. */
 export function reflect(point: Point, [a, b]: Segment): Point {
   const dx = b.x - a.x;
@@ -75,31 +70,23 @@ export function rotatePoint(point: Point, origin: Point, angle: number): Point {
 }
 
 /**
- * The part of a polygon on the side of a line where `normal · p >= offset` (Sutherland–Hodgman
- * against one edge). Empty when nothing with any area is left, so a polygon that only touches the
- * line does not survive as a sliver.
+ * The part of a polygon with `x >= minX` (Sutherland–Hodgman against one edge). Empty when
+ * nothing with any area is left, so a polygon that only touches the line does not survive as a
+ * sliver.
  */
-export function clipPolygonToHalfPlane(
-  points: readonly Point[],
-  normal: Point,
-  offset: number,
-): readonly Point[] {
-  const side = (p: Point): number => normal.x * p.x + normal.y * p.y - offset;
+export function clipPolygonToMinX(points: readonly Point[], minX: number): readonly Point[] {
   const kept: Point[] = [];
   let from = points.at(-1);
   if (from === undefined) return kept;
   for (const to of points) {
-    const a = side(from);
-    const b = side(to);
-    // Strictly across: a vertex on the line is kept as itself, not doubled as a crossing.
-    if ((a > 0 && b < 0) || (a < 0 && b > 0)) {
-      const t = a / (a - b);
-      kept.push({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t });
+    if (from.x >= minX !== to.x >= minX) {
+      const t = (minX - from.x) / (to.x - from.x);
+      kept.push({ x: minX, y: from.y + (to.y - from.y) * t });
     }
-    if (b >= 0) kept.push(to);
+    if (to.x >= minX) kept.push(to);
     from = to;
   }
-  return kept.some((p) => side(p) > 0) ? kept : [];
+  return kept.some((p) => p.x > minX) ? kept : [];
 }
 
 /**

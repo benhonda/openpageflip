@@ -74,7 +74,7 @@ describe("FlipController", () => {
     expect(manual.pending()).toBe(0);
     controller.pointerDown({ x: 470, y: 40 });
     controller.pointerDrag({ x: 330, y: 120 });
-    expect(frames.at(-1)?.leaves).not.toEqual([]);
+    expect(frames.at(-1)?.flip).not.toBeNull();
     expect(manual.pending()).toBe(0);
   });
 
@@ -87,7 +87,7 @@ describe("FlipController", () => {
     expect(controller.page).toBe(2);
     expect(shown).toEqual([2]);
     expect(states).toEqual([FlipState.flipping, FlipState.read]);
-    expect(last().leaves).toEqual([]);
+    expect(last().flip).toBeNull();
     expect(manual.pending()).toBe(0);
   });
 
@@ -103,7 +103,7 @@ describe("FlipController", () => {
     controller.pointerDown({ x: 470, y: 40 });
     controller.pointerDrag({ x: 100, y: 90 });
     expect(controller.currentState).toBe(FlipState.userFold);
-    expect(last().leaves[0]?.fold.position.x).toBeLessThanOrEqual(0);
+    expect(last().flip?.fold.position.x).toBeLessThanOrEqual(0);
     controller.pointerUp({ x: 100, y: 90 });
     for (let i = 0; i < 100; i++) manual.advance(16);
     expect(controller.page).toBe(2);
@@ -114,7 +114,7 @@ describe("FlipController", () => {
     controller.pointerUp({ x: 400, y: 100 });
     for (let i = 0; i < 100; i++) manual.advance(16);
     expect(controller.page).toBe(2);
-    expect(last().leaves).toEqual([]);
+    expect(last().flip).toBeNull();
   });
 
   test("a press without movement is a click that flips", async () => {
@@ -148,7 +148,7 @@ describe("FlipController", () => {
     const { controller, last } = setup();
     expect(controller.pointerDown({ x: 400, y: 175 })).toBe(false);
     controller.pointerDrag({ x: 200, y: 120 });
-    expect(last().leaves).toEqual([]);
+    expect(last().flip).toBeNull();
     controller.pointerUp({ x: 200, y: 120 });
     expect(controller.currentState).toBe(FlipState.read);
     expect(controller.page).toBe(0);
@@ -161,7 +161,7 @@ describe("FlipController", () => {
     controller.pointerUp({ x: 470, y: 40 });
     controller.hover({ x: 470, y: 40 });
     expect(controller.currentState).toBe(FlipState.read);
-    expect(last().leaves).toEqual([]);
+    expect(last().flip).toBeNull();
   });
 
   test("in portrait the visible page's spine-side edge turns back and its outer edge forward", () => {
@@ -180,15 +180,15 @@ describe("FlipController", () => {
     const { controller, progress, last } = setup({ startPage: 2 }, 6, { w: 300, h: 420 });
     controller.pointerDown({ x: 40, y: 200 });
     controller.pointerDrag({ x: 100, y: 200 });
-    // Its fold runs forward, off itself, over the page it is coming back onto, which lies flat
-    // under it; nothing of it lies in the hidden half. The turn is still back.
+    // Its fold runs forward, off itself, over the page it is coming back onto; nothing of it lies
+    // in the hidden half. The turn is still back.
     expect(last()).toMatchObject({
-      right: 2,
-      leaves: [{ direction: "forward", front: 1, flipping: 1, bottom: 2 }],
+      right: 1,
+      flip: { direction: "forward", flipping: 1, bottom: 2 },
     });
     expect(progress.at(-1)).toMatchObject({ from: 2, to: 1, direction: "back" });
     // The pointer holds the crease: it has come 60px from where the press took hold.
-    const { top, bottom } = last().leaves[0]?.fold.intersections ?? {};
+    const { top, bottom } = last().flip?.fold.intersections ?? {};
     expect(Math.abs(((top?.x ?? 0) + (bottom?.x ?? 0)) / 2 - 60)).toBeLessThan(2);
   });
 
@@ -201,20 +201,20 @@ describe("FlipController", () => {
     controller.hover({ x: 40, y: 370 });
     manual.advance(1000);
     // A crease a furl's depth past the spine, leaning toward the pointer near the bottom corner.
-    expect(last()).toMatchObject({ right: 2, leaves: [{ front: 1, flipping: 1, bottom: 2 }] });
-    const { top, bottom } = last().leaves[0]?.fold.intersections ?? {};
+    expect(last()).toMatchObject({ right: 1, flip: { flipping: 1, bottom: 2 } });
+    const { top, bottom } = last().flip?.fold.intersections ?? {};
     expect(bottom?.x).toBeGreaterThan(top?.x ?? Infinity);
     expect(Math.abs(((top?.x ?? 0) + (bottom?.x ?? 0)) / 2 - 30)).toBeLessThan(2);
     // Barely begun, as the page is, and shaded like a turn just begun: its fold is nearly all the
     // way back, where a forward turn's shadows have faded to nothing.
     expect(progress.at(-1)).toMatchObject({ from: 2, to: 1, direction: "back" });
     expect(progress.at(-1)?.progress).toBeLessThan(0.25);
-    expect(last().leaves[0]?.shadow?.opacity).toBeGreaterThan(0.25);
+    expect(last().flip?.shadow?.opacity).toBeGreaterThan(0.25);
 
     // Leaving the edge, or the book, lets it curl away again; the page never turns.
     controller.hover({ x: 150, y: 370 });
     manual.advance(1000);
-    expect(last().leaves).toEqual([]);
+    expect(last().flip).toBeNull();
     expect(last().right).toBe(2);
     expect(progress.at(-1)?.progress).toBe(0);
     controller.hover({ x: 40, y: 370 });
@@ -227,16 +227,13 @@ describe("FlipController", () => {
     // The outer edge furls like any other.
     controller.hover({ x: 260, y: 370 });
     manual.advance(1000);
-    expect(last()).toMatchObject({
-      right: 3,
-      leaves: [{ direction: "forward", front: 2, flipping: 2 }],
-    });
+    expect(last()).toMatchObject({ right: 2, flip: { direction: "forward", flipping: 2 } });
   });
 
   test("a press takes that cue in hand: the crease stays under the pointer, and past the middle it turns", () => {
     const { controller, manual, last } = setup({ startPage: 2 }, 6, { w: 300, h: 420 });
     const crease = () => {
-      const { top, bottom } = last().leaves[0]?.fold.intersections ?? {};
+      const { top, bottom } = last().flip?.fold.intersections ?? {};
       return ((top?.x ?? 0) + (bottom?.x ?? 0)) / 2;
     };
     controller.hover({ x: 40, y: 370 });
@@ -278,14 +275,14 @@ describe("FlipController", () => {
     expect(controller.currentState).toBe(FlipState.read);
     controller.pointerDrag({ x: 330, y: 120 });
     expect(controller.currentState).toBe(FlipState.userFold);
-    expect(last().leaves[0]?.flipping).toBe(4);
+    expect(last().flip?.flipping).toBe(4);
   });
 
   test("with drag off, a long press-and-move neither folds nor clicks", () => {
     const { controller, last } = setup({ drag: false });
     controller.pointerDown({ x: 470, y: 40 });
     controller.pointerDrag({ x: 200, y: 120 });
-    expect(last().leaves).toEqual([]);
+    expect(last().flip).toBeNull();
     controller.pointerUp({ x: 200, y: 120 });
     expect(controller.currentState).toBe(FlipState.read);
     expect(controller.page).toBe(0);
@@ -300,112 +297,18 @@ describe("FlipController", () => {
     const { controller, last } = setup({ size: "stretch" });
     controller.pointerDown({ x: 470, y: 40 });
     controller.pointerDrag({ x: 330, y: 120 });
-    expect(last().leaves).not.toEqual([]);
+    expect(last().flip).not.toBeNull();
     const options = resolveOptions({ width: 250, height: 350, size: "stretch" });
     controller.setLayout(computeLayout(600, 420, options));
-    expect(last().leaves).toEqual([]);
-    // And the book is at rest again, so the next hover or press is taken.
-    expect(controller.currentState).toBe(FlipState.read);
+    expect(last().flip).toBeNull();
   });
 
-  test("a resize mid-flip drops it and leaves the book at rest", async () => {
-    const { controller, manual } = setup({ size: "stretch" });
-    const turned = controller.flipNext(FlipCorner.top);
-    manual.advance(16);
-    const options = resolveOptions({ width: 250, height: 350, size: "stretch" });
-    controller.setLayout(computeLayout(600, 420, options));
-    expect(await turned).toBe(false);
-    expect(controller.currentState).toBe(FlipState.read);
-  });
-
-  describe("flipTo riffles through the leaves between", () => {
-    test("two spreads away, the second leaf lifts under the first before it lands, and the host hears one turn", async () => {
-      const { controller, manual, shown, progress, frames } = setup();
-      expect(await settle(controller.flipTo(5, FlipCorner.bottom), manual)).toBe(true);
-      expect(controller.page).toBe(4);
-      expect(shown).toEqual([4]);
-
-      // Both leaves in the air: the first to lift on top, and under them the page the lowest
-      // lifts off, with the spread the book started on still down on the left.
-      expect(frames.find((f) => f.leaves.length === 2)).toMatchObject({
-        left: 0,
-        right: 5,
-        leaves: [
-          { front: 1, flipping: 2, bottom: 3 },
-          { front: 3, flipping: 4, bottom: 5 },
-        ],
-      });
-
-      // One turn from 0 to 4, only ever going on, that ends on exactly 1.
-      expect(progress.every((p) => p.from === 0 && p.to === 4 && p.direction === "forward")).toBe(
-        true,
-      );
-      const values = progress.map((p) => p.progress);
-      expect(values).toEqual(values.toSorted((a, b) => a - b));
-      expect(values.at(-1)).toBe(1);
-
-      expect(await settle(controller.flipTo(4, FlipCorner.top), manual)).toBe(false);
-    });
-
-    test("a long jump turns five leaves, each showing pages from an even sample of those it passes", async () => {
-      const { controller, manual, shown, frames } = setup({}, 40);
-      expect(await settle(controller.flipTo(38, FlipCorner.top), manual)).toBe(true);
-      expect(shown).toEqual([38]);
-      // Spreads 0, 4, 8, 11, 15 and 19 of 20: each leaf's front is the right page of one stop,
-      // its back the left page of the next.
-      const turned = new Map(frames.flatMap((f) => f.leaves.map((l) => [l.front, l.flipping])));
-      expect([...turned]).toEqual([
-        [1, 8],
-        [9, 16],
-        [17, 22],
-        [23, 30],
-        [31, 38],
-      ]);
-    });
-
-    // The leaf above covers the one under it everywhere until it lands, and a landed leaf lies
-    // under everything. So the stacking is only right if no leaf reaches past the spine while one
-    // above it is still in the air, whatever the corner, direction or easing.
-    test.each([
-      ["forward from the top", 0, 38, FlipCorner.top, (t: number) => t],
-      ["back from the bottom", 38, 0, FlipCorner.bottom, (t: number) => t],
-      ["forward, easing out", 0, 38, FlipCorner.top, (t: number) => 1 - (1 - t) ** 3],
-      ["back, easing in", 38, 0, FlipCorner.bottom, (t: number) => t ** 3],
-    ])(
-      "no leaf reaches past the spine while one above it is in the air: %s",
-      async (_, from, to, corner, easing) => {
-        const { controller, manual, frames } = setup({ startPage: from, easing }, 40);
-        expect(await settle(controller.flipTo(to, corner), manual)).toBe(true);
-        expect(Math.max(...frames.map((f) => f.leaves.length))).toBeGreaterThan(1);
-        const under = frames.flatMap((f) => f.leaves.slice(1));
-        expect(under.every((leaf) => leaf.fold.flippingClip.every((p) => p.x >= 0))).toBe(true);
-      },
-    );
-
-    test("an instant turn mid-jump drops the leaves in the air and stays where it was sent", async () => {
-      const { controller, manual, shown, states, last } = setup({}, 40);
-      const jump = controller.flipTo(38, FlipCorner.top);
-      for (let i = 0; i < 20; i++) manual.advance(16);
-      expect(last().leaves.length).toBeGreaterThan(0);
-      controller.showPage(10);
-      expect(await jump).toBe(false);
-      expect(last()).toMatchObject({ left: 10, right: 11, leaves: [] });
-      expect(states.at(-1)).toBe(FlipState.read);
-      for (let i = 0; i < 100; i++) manual.advance(16);
-      expect(controller.page).toBe(10);
-      expect(shown).toEqual([10]);
-    });
-
-    test("in portrait a jump back is a jump forward run backward: the last page to come back is on top", async () => {
-      const { controller, manual, shown, frames } = setup({ startPage: 5 }, 8, { w: 300, h: 420 });
-      shown.length = 0;
-      expect(await settle(controller.flipTo(1, FlipCorner.top), manual)).toBe(true);
-      expect(shown).toEqual([1]);
-      const both = frames.find((f) => f.leaves.length === 2);
-      expect(both?.leaves.map((l) => l.front)).toEqual([3, 4]);
-      // Under both, the page the first of them is coming back onto.
-      expect(both?.right).toBe(5);
-    });
+  test("flipTo jumps beside the target and animates the last turn", async () => {
+    const { controller, manual, shown } = setup();
+    expect(await settle(controller.flipTo(5, FlipCorner.bottom), manual)).toBe(true);
+    expect(controller.page).toBe(4);
+    expect(shown.at(-1)).toBe(4);
+    expect(await settle(controller.flipTo(4, FlipCorner.top), manual)).toBe(false);
   });
 
   test("hovering an edge furls it over a quarter of flipDuration; leaving settles it as slowly", () => {
@@ -414,22 +317,22 @@ describe("FlipController", () => {
     expect(controller.currentState).toBe(FlipState.foldCorner);
     // Halfway through the 250ms furl the edge is part way in, not already there.
     for (let i = 0; i < 8; i++) manual.advance(16);
-    const midway = last().leaves[0]?.fold.position;
+    const midway = last().flip?.fold.position;
     expect(midway?.x).toBeGreaterThan(190);
     expect(midway?.x).toBeLessThan(249);
     for (let i = 0; i < 10; i++) manual.advance(16);
     // Midway along the edge the corner is pulled straight in: the crease runs parallel to the
     // spine, 30px in.
-    expect(last().leaves[0]?.fold.position).toEqual({ x: 190, y: 350 - REST_NUDGE.down });
-    expect(Math.abs(last().leaves[0]?.fold.angle ?? 1)).toBeLessThan(0.05);
+    expect(last().flip?.fold.position).toEqual({ x: 190, y: 350 - REST_NUDGE.down });
+    expect(Math.abs(last().flip?.fold.angle ?? 1)).toBeLessThan(0.05);
 
     controller.hoverEnd();
     expect(controller.currentState).toBe(FlipState.read);
     // The drop animates too: part way through, the edge is still furled.
     for (let i = 0; i < 8; i++) manual.advance(16);
-    expect(last().leaves).not.toEqual([]);
+    expect(last().flip).not.toBeNull();
     for (let i = 0; i < 10; i++) manual.advance(16);
-    expect(last().leaves).toEqual([]);
+    expect(last().flip).toBeNull();
     expect(controller.page).toBe(0);
   });
 
@@ -437,7 +340,7 @@ describe("FlipController", () => {
     const { controller, manual, last } = setup();
     /** How far in the crease is at the top and at the bottom of the page. */
     const depths = () => {
-      const { top, bottom } = last().leaves[0]?.fold.intersections ?? {};
+      const { top, bottom } = last().flip?.fold.intersections ?? {};
       return { top: 250 - (top?.x ?? 250), bottom: 250 - (bottom?.x ?? 250) };
     };
     controller.hover({ x: 470, y: 30 });
@@ -463,14 +366,14 @@ describe("FlipController", () => {
     const { controller, manual, last } = setup();
     controller.hover({ x: 470, y: 175 });
     for (let i = 0; i < 20; i++) manual.advance(16);
-    expect(last().leaves[0]?.fold.position).toEqual({ x: 190, y: 350 - REST_NUDGE.down });
+    expect(last().flip?.fold.position).toEqual({ x: 190, y: 350 - REST_NUDGE.down });
 
     // Off the edge, and the mouse keeps moving while the edge settles.
     controller.hover({ x: 300, y: 175 });
     let previousX = 190;
     for (let i = 0; i < 16; i++) {
       manual.advance(16);
-      const position = last().leaves[0]?.fold.position;
+      const position = last().flip?.fold.position;
       if (position !== undefined) {
         expect(position.x).toBeGreaterThan(previousX);
         previousX = position.x;
@@ -478,7 +381,7 @@ describe("FlipController", () => {
       controller.hover({ x: 300 + i, y: 175 });
     }
     // 256ms have passed: the 250ms settle has landed.
-    expect(last().leaves).toEqual([]);
+    expect(last().flip).toBeNull();
     expect(controller.currentState).toBe(FlipState.read);
   });
 
@@ -490,14 +393,14 @@ describe("FlipController", () => {
     controller.hover({ x: 30, y: 30 });
     expect(controller.currentState).toBe(FlipState.read);
     manual.advance(16);
-    expect(last().leaves[0]?.fold.position.x).toBeGreaterThan(190);
-    expect(last().leaves[0]?.direction).toBe(FlipDirection.forward);
+    expect(last().flip?.fold.position.x).toBeGreaterThan(190);
+    expect(last().flip?.direction).toBe(FlipDirection.forward);
     for (let i = 0; i < 20; i++) manual.advance(16);
-    expect(last().leaves).toEqual([]);
+    expect(last().flip).toBeNull();
     // Settled: the next move furls the left page.
     controller.hover({ x: 30, y: 30 });
     expect(controller.currentState).toBe(FlipState.foldCorner);
-    expect(last().leaves[0]?.direction).toBe(FlipDirection.back);
+    expect(last().flip?.direction).toBe(FlipDirection.back);
   });
 
   test("a drag moves the fold by the pointer's travel: straight in furls the edge, from a corner it folds across", () => {
@@ -507,18 +410,18 @@ describe("FlipController", () => {
     controller.pointerDown({ x: 470, y: 150 });
     controller.pointerDrag({ x: 370, y: 150 });
     expect(controller.currentState).toBe(FlipState.userFold);
-    expect(last().leaves[0]?.fold.position).toEqual({
+    expect(last().flip?.fold.position).toEqual({
       x: 250 - REST_NUDGE.in - 100,
       y: REST_NUDGE.down,
     });
-    expect(Math.abs(last().leaves[0]?.fold.angle ?? 1)).toBeLessThan(0.05);
+    expect(Math.abs(last().flip?.fold.angle ?? 1)).toBeLessThan(0.05);
     controller.pointerCancel();
     for (let i = 0; i < 20; i++) manual.advance(16); // the drop lands; a press mid-drop would carry on from it
     // From the corner, diagonally: the corner is where the pointer took it.
     controller.pointerDown({ x: 500 - REST_NUDGE.in, y: REST_NUDGE.down });
     controller.pointerDrag({ x: 400, y: 100 });
-    expect(last().leaves[0]?.fold.position).toEqual({ x: 150, y: 100 });
-    expect(Math.abs(last().leaves[0]?.fold.angle ?? 0)).toBeGreaterThan(0.5);
+    expect(last().flip?.fold.position).toEqual({ x: 150, y: 100 });
+    expect(Math.abs(last().flip?.fold.angle ?? 0)).toBeGreaterThan(0.5);
     controller.pointerCancel();
   });
 
@@ -526,13 +429,13 @@ describe("FlipController", () => {
     const { controller, manual, last } = setup();
     controller.hover({ x: 470, y: 150 });
     for (let i = 0; i < 8; i++) manual.advance(16);
-    const midway = last().leaves[0]?.fold.position;
+    const midway = last().flip?.fold.position;
     if (midway === undefined) throw new Error("no fold");
     controller.pointerDown({ x: 470, y: 150 });
     controller.pointerDrag({ x: 450, y: 150 });
     expect(controller.currentState).toBe(FlipState.userFold);
-    expect(last().leaves[0]?.fold.position.x).toBeCloseTo(midway.x - 20, 6);
-    expect(last().leaves[0]?.fold.position.y).toBeCloseTo(midway.y, 6);
+    expect(last().flip?.fold.position.x).toBeCloseTo(midway.x - 20, 6);
+    expect(last().flip?.fold.position.y).toBeCloseTo(midway.y, 6);
     expect(manual.pending()).toBe(0);
   });
 
@@ -543,9 +446,9 @@ describe("FlipController", () => {
     controller.pointerDown({ x: 470, y: 175 });
     controller.pointerUp({ x: 470, y: 175 });
     expect(controller.currentState).toBe(FlipState.flipping);
-    expect(last().leaves[0]?.fold.position).toEqual({ x: 190, y: 350 - REST_NUDGE.down });
+    expect(last().flip?.fold.position).toEqual({ x: 190, y: 350 - REST_NUDGE.down });
     manual.advance(16);
-    expect(last().leaves[0]?.fold.position.x).toBeLessThan(190);
+    expect(last().flip?.fold.position.x).toBeLessThan(190);
     for (let i = 0; i < 30; i++) manual.advance(16);
     await Promise.resolve();
     expect(controller.page).toBe(2);
@@ -555,7 +458,7 @@ describe("FlipController", () => {
     const { controller, last } = setup();
     controller.hover({ x: 300, y: 175 });
     expect(controller.currentState).toBe(FlipState.read);
-    expect(last().leaves).toEqual([]);
+    expect(last().flip).toBeNull();
   });
 
   test("a zero duration (reduced motion) lands the flip synchronously", async () => {
@@ -579,10 +482,6 @@ describe("FlipController", () => {
     expect(controller.currentState).toBe(FlipState.read);
     expect(manual.pending()).toBe(0);
     expect(await promise).toBe(true);
-    // A jump that would riffle lands all its leaves at once, too.
-    const jump = controller.flipTo(5, FlipCorner.top);
-    expect(controller.page).toBe(4);
-    expect(await jump).toBe(true);
   });
 
   test("destroy cancels the running animation and settles its promise", async () => {
