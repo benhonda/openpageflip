@@ -36,6 +36,15 @@
   outline-offset: -1px;
 }
 
+/* Blank paper for the sheets under a page when a jump turns several at once, in the inner pages'
+   background colour. Recolour it with `--opf-sheet-color`. */
+.opf-sheet {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
 .opf-shadow {
   position: absolute;
   left: 0;

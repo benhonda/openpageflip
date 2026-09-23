@@ -56,6 +56,22 @@ export type FlipFrame = {
   /** Rotation about the spine for hard pages, in degrees. */
   readonly hardAngle: number;
   readonly shadow: ShadowData | null;
+  /**
+   * When a jump turns a clump of pages at once, the blank sheets under the turning one, nearest
+   * first. Empty for a turn of one page.
+   */
+  readonly sheets: readonly Sheet[];
+};
+
+/** A blank sheet of a clump turning together, under the page turning on top of it. */
+export type Sheet = {
+  /**
+   * For a soft page: its flap, in page space. It is pulled a little further over than the one
+   * above it, so what shows of it is the edge peeking out from under that one's curl.
+   */
+  readonly flap: readonly Point[];
+  /** For a hard page: how far round it has swung, as `FlipFrame.hardAngle`. */
+  readonly hardAngle: number;
 };
 
 /** Where a turn is, between the spread it started from and the spread it leads to. */
@@ -116,6 +132,9 @@ type Session = {
   shadow: ShadowData | null;
   /** The turn reached `to`. The fold cannot say so: where a page lands is a degenerate point. */
   landed: boolean;
+  /** Sheets turning with this one when a jump passes several spreads; 0 for a single turn. */
+  clump: number;
+  sheets: readonly Sheet[];
 };
 
 /** Pointer travel before a press counts as a drag rather than a click. */
@@ -138,6 +157,23 @@ const TILT = 15;
  * Exported so the parity suite can start its drags from the same point.
  */
 export const REST_NUDGE = { in: 1, down: 0.5 } as const;
+/** A jump turns this many sheets at most, one per spread it passes. */
+const MOST_SHEETS = 5;
+/**
+ * How far along the edge each soft sheet of a clump folds past the one above it at its widest, in
+ * pixels, where the fold meets the edge of the lifted corner. Its corner peeks out about twice as
+ * far.
+ */
+const SHEET_GAP = 3.5;
+/**
+ * How much more each deeper soft sheet curls under: this many pixels times the square of how deep
+ * it lies, on top of `SHEET_GAP`, so the edges splay out rather than lying evenly apart.
+ */
+const SHEET_CURL = 1.25;
+/** How far behind each sheet of a hard clump swings at its widest, in `progress` (0..100). */
+const BOARD_LAG = 1.2;
+/** How far into a turn (`progress`, 0..100) a clump has closed up again, well before it lands. */
+const CLUMP_CLOSED = 80;
 /** Animation paths longer than this take the full `flipDuration`; shorter ones scale down. */
 const FULL_FLIP_LENGTH = 1000;
 /**
@@ -216,7 +252,7 @@ export class FlipController {
   }
 
   setPages(pages: PageModel[]): void {
-    this.endSession();
+    this.drop();
     this.pages = pages;
     this.rebuildSpreads();
     this.showPage(Math.min(this.currentPage, Math.max(0, pages.length - 1)));
@@ -230,14 +266,20 @@ export class FlipController {
     this.container = layout.container;
     const orientationChanged = layout.orientation !== this.orientation;
     // A fold is computed for one page size; when that changes mid-flip the fold is dropped.
-    if (resized && !orientationChanged) this.endSession();
+    if (resized && !orientationChanged) this.drop();
     if (orientationChanged) {
-      this.endSession();
+      this.drop();
       this.orientation = layout.orientation;
       this.rebuildSpreads();
     }
     this.showPage(this.currentPage);
     return orientationChanged;
+  }
+
+  /** End any turn and put the book at rest, as a change of pages or size does mid-flip. */
+  private drop(): void {
+    this.endSession();
+    this.setState(FlipState.read);
   }
 
   private rebuildSpreads(): void {
@@ -303,36 +345,41 @@ export class FlipController {
   // ---- animated flips -----------------------------------------------------------------------
 
   flipNext(corner: FlipCorner): Promise<boolean> {
-    return this.flipFrom({
-      x: this.rect.left + this.rect.pageWidth * 2 - 10,
-      y: corner === FlipCorner.top ? 1 : this.rect.height - 2,
-    });
+    return this.flipFrom(this.outerEdge(FlipDirection.forward, corner));
   }
 
   flipPrev(corner: FlipCorner): Promise<boolean> {
-    return this.flipFrom({
-      x: this.rect.left + 10,
+    return this.flipFrom(this.outerEdge(FlipDirection.back, corner));
+  }
+
+  /** Where a click on a page's outer edge would be, at the given corner. */
+  private outerEdge(direction: FlipDirection, corner: FlipCorner): Point {
+    return {
+      x:
+        direction === FlipDirection.forward
+          ? this.rect.left + this.rect.pageWidth * 2 - 10
+          : this.rect.left + 10,
       y: corner === FlipCorner.top ? 1 : this.rect.height - 2,
-    });
+    };
   }
 
   /**
-   * Jumps to the spread beside the target without animation, then animates the last turn.
-   * The static pages keep showing the current spread until that turn lands.
+   * Jumps to the spread beside the target without animation, then animates the last turn. The
+   * static pages keep showing the current spread until that turn lands, so the page on show turns
+   * straight onto the target. Past more than one spread it turns as a clump: a few sheets, one per
+   * spread passed up to `MOST_SHEETS`, that fan out behind it (see `clumpSheets`).
    */
   flipTo(page: number, corner: FlipCorner): Promise<boolean> {
     // A running flip lands first, so the target is measured from where the book actually is.
     this.tween?.finish();
     const target = spreadIndexOfPage(this.spreads, page);
     if (target === null || target === this.spreadIndex) return Promise.resolve(false);
-    if (target > this.spreadIndex) {
-      this.spreadIndex = target - 1;
-      this.syncCurrentPage();
-      return this.flipNext(corner);
-    }
-    this.spreadIndex = target + 1;
+    const passed = Math.abs(target - this.spreadIndex);
+    const clump = passed > 1 ? Math.min(MOST_SHEETS, passed) : 0;
+    const direction = target > this.spreadIndex ? FlipDirection.forward : FlipDirection.back;
+    this.spreadIndex = direction === FlipDirection.forward ? target - 1 : target + 1;
     this.syncCurrentPage();
-    return this.flipPrev(corner);
+    return this.flipFrom(this.outerEdge(direction, corner), clump);
   }
 
   private syncCurrentPage(): void {
@@ -340,14 +387,15 @@ export class FlipController {
     if (spread !== undefined) this.currentPage = spread[0];
   }
 
-  /** Full animated flip starting at a container point, as a click would. */
-  private flipFrom(containerPos: Point): Promise<boolean> {
+  /** Full animated flip starting at a container point, as a click would, carrying `clump` sheets with it. */
+  private flipFrom(containerPos: Point, clump = 0): Promise<boolean> {
     // A furl under the pointer lands, and the flip carries on from it. A running flip lands too,
     // which ends its session, so the new flip starts from the settled book.
     if (this.session !== null) this.tween?.finish();
     const held = this.session;
     const session = this.start(containerPos);
     if (session === null) return Promise.resolve(false);
+    session.clump = clump;
 
     this.setState(FlipState.flipping);
     const margin = session.pageHeight / 10;
@@ -665,6 +713,8 @@ export class FlipController {
       hardAngle: 0,
       shadow: null,
       landed: false,
+      clump: 0,
+      sheets: [],
     };
     return this.session;
   }
@@ -703,8 +753,7 @@ export class FlipController {
     // quarter turn, flat to upright at the spine: past upright it would lie over the hidden half,
     // out of sight, and half the turn would show nothing moving.
     const swing = this.orientation === Orientation.portrait ? progress / 2 : progress;
-    session.hardAngle =
-      (foldDirection(session) === FlipDirection.forward ? 90 : -90) * ((200 - swing * 2) / 100);
+    session.hardAngle = this.hardAngleAt(session, progress);
     // Soft shadows grow wider and fainter as the turn goes on, and a reversed turn goes on as its
     // fold goes back: shaded by the fold, it would start where a forward turn ends, all but bare.
     const turned = session.reversed ? 100 - progress : progress;
@@ -719,7 +768,68 @@ export class FlipController {
             progress: swing * 2,
           }
         : null;
+    session.sheets = this.clumpSheets(session, fold);
     this.render();
+  }
+
+  /** A hard page's angle about the spine at `progress` (0..100) of its turn. */
+  private hardAngleAt(session: Session, progress: number): number {
+    const swing = this.orientation === Orientation.portrait ? progress / 2 : progress;
+    return (
+      (foldDirection(session) === FlipDirection.forward ? 90 : -90) * ((200 - swing * 2) / 100)
+    );
+  }
+
+  /**
+   * The blank sheets of a clump turning together. They fan out as the clump gets going, widest
+   * two fifths of the way over, and have closed up again by `CLUMP_CLOSED`, so it lands as one.
+   * The clump folds over as a whole, so under the page on top each soft sheet folds a little
+   * further over than the one above it, and curls a little further under (`SHEET_CURL`): its flap
+   * peeks out along that one's curled edge, most at the corner and tapering to nothing at the far
+   * end of the fold. A hard one swings a little behind.
+   */
+  private clumpSheets(session: Session, lead: Fold): readonly Sheet[] {
+    if (session.clump === 0) return [];
+    const { pageWidth: w, pageHeight: h, corner } = session;
+    const fan = Math.sin(Math.PI * Math.min(1, lead.progress / CLUMP_CLOSED));
+    const lifted = { x: w, y: corner === FlipCorner.bottom ? h : 0 };
+    // Where the turning page's fold meets the edge the lifted corner is on, and its far end.
+    const { top, side, bottom } = lead.intersections;
+    const near = corner === FlipCorner.bottom ? bottom : top;
+    const far = corner === FlipCorner.bottom ? (top ?? side) : (bottom ?? side);
+    const sheets: Sheet[] = [];
+    for (let sheet = 1; sheet <= session.clump; sheet++) {
+      // Each sheet folds about a line from the same far end, further along the corner's edge
+      // toward the spine: it fans out from the corner and follows the page the whole way along.
+      const along = fan * (SHEET_GAP * sheet + SHEET_CURL * sheet * sheet);
+      // Moved from the turning page's own corner by what the move of the fold does to a corner,
+      // so a sheet closed up lies exactly under it.
+      const moved =
+        near === null || far === null
+          ? null
+          : {
+              to: reflect(lifted, [{ x: Math.max(1, near.x - along), y: near.y }, far]),
+              from: reflect(lifted, [near, far]),
+            };
+      const fold =
+        moved === null
+          ? null
+          : computeFold({
+              direction: foldDirection(session),
+              corner,
+              pageWidth: w,
+              pageHeight: h,
+              point: {
+                x: lead.position.x + moved.to.x - moved.from.x,
+                y: lead.position.y + moved.to.y - moved.from.y,
+              },
+            });
+      sheets.push({
+        flap: fold?.flippingClip ?? [],
+        hardAngle: this.hardAngleAt(session, Math.max(0, lead.progress - BOARD_LAG * sheet * fan)),
+      });
+    }
+    return sheets;
   }
 
   private directionAt(bookPos: Point): FlipDirection {
@@ -806,6 +916,7 @@ export class FlipController {
               progress: folded.progress,
               hardAngle: folded.hardAngle,
               shadow: folded.shadow,
+              sheets: folded.sheets,
             }
           : null,
     };

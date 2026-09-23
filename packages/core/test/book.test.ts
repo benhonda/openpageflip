@@ -425,6 +425,76 @@ describe("options that switch behaviour off or change the layout", () => {
     expect(document.elementFromPoint(bounds.left + 150, bounds.top + 200)).toBe(pages[0]);
   });
 
+  /** Runs a jump to `page` to the end, returning the most pieces of blank paper shown at once. */
+  async function jumpShowingSheets(book: Book, container: HTMLElement, page: number) {
+    const shown = () =>
+      [...container.querySelectorAll<HTMLElement>(".opf-sheet")].filter(
+        (el) => el.style.display !== "none",
+      );
+    let done = false;
+    const turned = book.flipTo(page).then((v) => {
+      done = true;
+      return v;
+    });
+    let most = 0;
+    while (!done) {
+      most = Math.max(most, shown().length);
+      await frames(1);
+    }
+    return { turned: await turned, most, after: shown().length };
+  }
+
+  test("a jump turns a clump: blank sheets show while it is in the air, and are put away as it lands", async () => {
+    const s = stage(500, 20);
+    const book = createBook(s.container, { width: 250, height: 350, flipDuration: 400 });
+    cleanup.push(() => {
+      book.destroy();
+      s.stage.remove();
+    });
+    const { turned, most, after } = await jumpShowingSheets(book, s.container, 18);
+    expect(turned).toBe(true);
+    expect(most).toBe(5);
+    expect(after).toBe(0);
+    // Only the page on show and the target spread were ever drawn.
+    expect(s.pages.filter((p) => getComputedStyle(p).display !== "none")).toEqual([
+      s.pages[18],
+      s.pages[19],
+    ]);
+  });
+
+  test("a jump closing onto a hard cover turns a clump of inner pages, not of covers", async () => {
+    const s = stage(500, 20);
+    for (const [i, p] of s.pages.entries()) {
+      p.style.background = i === 0 || i === 19 ? "rgb(212, 85, 58)" : "rgb(241, 236, 226)";
+    }
+    const book = createBook(s.container, {
+      width: 250,
+      height: 350,
+      flipDuration: 400,
+      cover: true,
+      startPage: 17,
+    });
+    cleanup.push(() => {
+      book.destroy();
+      s.stage.remove();
+    });
+    const paper = new Set<string>();
+    const watch = new MutationObserver(() => {
+      for (const el of s.container.querySelectorAll<HTMLElement>(".opf-sheet > div")) {
+        if (el.style.backgroundColor !== "") paper.add(el.style.backgroundColor);
+      }
+    });
+    watch.observe(s.container, { subtree: true, attributes: true, attributeFilter: ["style"] });
+    const { turned, most, after } = await jumpShowingSheets(book, s.container, 0);
+    watch.disconnect();
+    // The sheets between are inner pages: the cover's colour never stands in for them.
+    expect([...paper].some((c) => c.includes("241, 236, 226"))).toBe(true);
+    expect([...paper].some((c) => c.includes("212, 85, 58"))).toBe(false);
+    expect(turned).toBe(true);
+    expect(most).toBe(5);
+    expect(after).toBe(0);
+  });
+
   test("a single-page book's page coming back uncurls over the page on show, never beside the book", async () => {
     const s = stage(900);
     s.container.style.marginLeft = "300px";

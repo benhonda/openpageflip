@@ -8,7 +8,7 @@
  */
 
 import { type Axes, axesFor, isVertical, type ScreenSide } from "../axes.ts";
-import type { Frame, ShadowData } from "../controller.ts";
+import type { FlipFrame, Frame, ShadowData } from "../controller.ts";
 import { pageToContainer } from "../coords.ts";
 import type { Point } from "../geometry/point.ts";
 import { clipPolygonToMinX, rotatePoint } from "../geometry/point.ts";
@@ -24,13 +24,18 @@ import {
 } from "../options.ts";
 import type { PageModel } from "../pages.ts";
 
+/**
+ * Stacking, in tens so the blank sheets of a clump can sit between two layers, one step lower
+ * each: a hard clump's boards just under the board turning, a soft clump's flaps just under the
+ * page revealed, which hides where a curled sheet's fold swings past the turning page's own.
+ */
 const Z = {
-  flat: 1,
-  bottom: 3,
-  hardShadow: 4,
-  flipping: 5,
-  hardInnerShadow: 5,
-  shadow: 10,
+  flat: 10,
+  bottom: 30,
+  hardShadow: 40,
+  flipping: 50,
+  hardInnerShadow: 50,
+  shadow: 100,
 } as const;
 
 const CLASS = {
@@ -46,6 +51,8 @@ const CLASS = {
   soft: "opf-page--soft",
   hard: "opf-page--hard",
   shadow: "opf-shadow",
+  /** Blank paper standing for the sheets of a clump a jump turns at once. */
+  sheet: "opf-sheet",
 } as const;
 
 type Side = "left" | "right";
@@ -92,6 +99,8 @@ type Saved = { readonly cssText: string; readonly className: string };
 
 export class DomRenderer {
   private readonly shadows: Record<"outer" | "inner" | "hardOuter" | "hardInner", HTMLDivElement>;
+  /** Blank paper for the sheets of a clump, made as a jump first needs them and kept hidden after. */
+  private readonly blanks: HTMLDivElement[] = [];
   private pages: readonly PageModel[] = [];
   private saved = new Map<HTMLElement, Saved>();
   /**
@@ -204,6 +213,8 @@ export class DomRenderer {
         this.drawFlat(frame.right, "right", rect);
       }
     }
+
+    this.drawSheets(flip, flippingHard, frame);
 
     if (flip === null) {
       this.dropClone();
@@ -426,18 +437,25 @@ export class DomRenderer {
     });
   }
 
+  /** Where a page on `side` goes to turn about its spine edge: the left page's right edge, the right page's left. */
+  private hingedAt(
+    side: Side,
+    rect: BookRect,
+  ): { readonly translate: Point; readonly origin: Point } {
+    const spine = rect.left + rect.width / 2;
+    return this.placement(
+      { x: side === "left" ? rect.left : spine, y: rect.top },
+      side === "left" ? { x: rect.pageWidth, y: 0 } : { x: 0, y: 0 },
+      rect.pageWidth,
+    );
+  }
+
   private drawHard(index: number, side: Side, angle: number, layer: Layer, rect: BookRect): void {
     const el = this.element(index, side);
     if (el === null) return;
     el.classList.remove(CLASS.flat);
     el.classList.toggle(CLASS.turning, layer === "flipping");
-    const spine = rect.left + rect.width / 2;
-    // A page turns about its spine edge: the left page's right edge, the right page's left edge.
-    const at = this.placement(
-      { x: side === "left" ? rect.left : spine, y: rect.top },
-      side === "left" ? { x: rect.pageWidth, y: 0 } : { x: 0, y: 0 },
-      rect.pageWidth,
-    );
+    const at = this.hingedAt(side, rect);
     applyPageStyle(el, {
       position: "absolute",
       display: "block",
@@ -450,6 +468,79 @@ export class DomRenderer {
       transformOrigin: `${at.origin.x}px ${at.origin.y}px`,
       transform: `translate3d(${at.translate.x}px, ${at.translate.y}px, 0) ${this.spin(angle)}`,
     });
+  }
+
+  // ---- a clump of sheets ----
+
+  /**
+   * The `i`th piece of blank paper: a wrapper that draws the paper's edge, around the paper
+   * itself, cut to shape. The edge is a drop shadow, which the cut would trim off the paper.
+   */
+  private blank(i: number): { readonly edge: HTMLDivElement; readonly paper: HTMLDivElement } {
+    const existing = this.blanks[i];
+    const edge = existing ?? document.createElement("div");
+    if (existing === undefined) {
+      edge.className = CLASS.sheet;
+      edge.append(document.createElement("div"));
+      this.container.append(edge);
+      this.blanks.push(edge);
+    }
+    const paper = edge.firstElementChild;
+    if (!(paper instanceof HTMLDivElement)) {
+      throw new TypeError("@openpageflip/core: a sheet has lost its paper");
+    }
+    return { edge, paper };
+  }
+
+  /**
+   * The blank sheets turning with a page when a jump turns several at once: plain paper in the
+   * colour of the inner pages, each edged with a hairline so the stack reads as sheets. Soft:
+   * each sheet's flap, under the page revealed, peeking out along the turning page's curled
+   * edges. Hard: a sheet swinging a little behind the board turning, showing past its edge.
+   */
+  private drawSheets(flip: FlipFrame | null, hard: boolean, frame: Frame): void {
+    const sheets = flip?.sheets ?? [];
+    const colour = flip === null || sheets.length === 0 ? "" : this.innerPaper(flip, frame);
+    const portrait = frame.orientation === Orientation.portrait;
+    const cover = `width: ${frame.container.width}px; height: ${frame.container.height}px;`;
+    for (const [i, sheet] of sheets.entries()) {
+      if (flip === null) break;
+      const { edge, paper } = this.blank(i);
+      edge.style.cssText = `display: block; ${cover} z-index: ${(hard ? Z.flipping : Z.bottom) - 1 - i}; filter: drop-shadow(0 0 0.75px rgba(0, 0, 0, 0.55));${hard ? " perspective: inherit;" : ""}`;
+      const fill = `position: absolute; left: 0; top: 0; background-color: var(--opf-sheet-color, ${colour}); filter: brightness(${1 - 0.015 * (i + 1)});`;
+      if (hard) {
+        const side: Side = flip.direction === FlipDirection.forward ? "right" : "left";
+        const at = this.hingedAt(side, frame.rect);
+        const size = this.pageSize(frame.rect);
+        paper.style.cssText = `${fill} width: ${size.width}; height: ${size.height}; transform-origin: ${at.origin.x}px ${at.origin.y}px; transform: translate3d(${at.translate.x}px, ${at.translate.y}px, 0) ${this.spin(180 + sheet.hardAngle)};`;
+        continue;
+      }
+      // Only the page on show is on stage in portrait, as for the page turning.
+      const flap = portrait ? clipPolygonToMinX(sheet.flap, 0) : sheet.flap;
+      const points = flap.map((p) =>
+        this.axes.toScreen(pageToContainer(p, frame.rect, flip.direction)),
+      );
+      paper.style.cssText = `${fill} ${cover} clip-path: ${clipPath(points)};`;
+    }
+    for (const el of this.blanks.slice(sheets.length)) el.style.cssText = "display: none";
+  }
+
+  /**
+   * The paper colour of the sheets between: a soft page's background, from the page revealed,
+   * the one lifting or the one coming over, so a cover's colour never stands in for the pages
+   * inside it. White when none is soft or has a background of its own.
+   */
+  private innerPaper(flip: FlipFrame, frame: Frame): string {
+    const front = flip.direction === FlipDirection.forward ? frame.right : frame.left;
+    const candidates = [flip.bottom, front, flip.flipping].flatMap((index) => {
+      const page = index === null ? undefined : this.pages[index];
+      return page === undefined ? [] : [page];
+    });
+    const page = candidates.find((p) => p.density === PageDensity.soft);
+    const colour = page === undefined ? "" : getComputedStyle(page.element).backgroundColor;
+    return colour === "" || colour === "transparent" || colour === "rgba(0, 0, 0, 0)"
+      ? "#fff"
+      : colour;
   }
 
   // ---- shadows --------------------------------------------------------------------------------
@@ -582,6 +673,8 @@ export class DomRenderer {
     for (const page of this.pages) this.restore(page.element);
     this.pages = [];
     for (const el of Object.values(this.shadows)) el.remove();
+    for (const el of this.blanks) el.remove();
+    this.blanks.length = 0;
     this.container.classList.remove(CLASS.book, CLASS.bound(this.options.binding));
     const style = this.container.style;
     style.width = "";

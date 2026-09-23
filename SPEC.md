@@ -84,6 +84,17 @@ closed by design.
   was a second way to draw a page. Rejected: clipping the old back turn to the page (a flat card
   sliding out from the spine, no curl until late), and opening the spread for a turn back (no room
   on a phone; the book promises one page).
+- `[settled]` 2026-09-22: **A jump is one turn of a clump of pages.** `flipTo` further than the
+  next spread turns the page on show straight onto the target, as before, with a few blank sheets
+  (one per spread passed, up to `MOST_SHEETS`) fanning out from under it: soft sheets peek out
+  along its curled edge, curling further under the deeper they lie, and hard ones swing a little
+  behind a board. They open as the turn gets going and have closed by `CLUMP_CLOSED`, so it lands
+  as one (`clumpSheets` in `packages/core/src/controller.ts`, drawn by `drawSheets` in
+  `render/dom.ts` in a soft page's colour, never a cover's). No page between is drawn and the
+  host hears one turn. Tried and dropped the same day, after looking at them: riffling up to five
+  real leaves in sequence (read as one page at a time), overlapping them (independent folds cross,
+  which paper cannot do), nesting each fold inside the one above (a crowded fan), and fixed-width
+  strips at the crease (a barcode, not paper).
 - `[settled]` 2026-09-18: **Every binding is the same book seen from another side.**
   `binding: "left" | "right" | "top" | "bottom"`. `right` is a right-to-left book (a manga: the
   spine on the right, the cover alone on the left, a swipe to the right reads on), which is the
@@ -285,6 +296,11 @@ this library. These are the places where it was wrong and we did not copy it:
   white page over a white page loses its free edge, which no shadow ever marked. This is a look,
   not geometry: the parity suite pins ours to the original's look (`mountOurs` in
   `packages/core/test/visual/harness.ts`).
+- `flipTo` further than the next spread turns as a clump of pages, blank sheets fanning out from
+  under the page turning. The original turned a single page. The parity suite compares single
+  turns only.
+- A resize or new pages mid-turn drop the turn and leave the book at rest (`read`); it used to
+  stay `flipping`, ignoring hover and clicks until the next turn.
 - `flipPrev` aims at the book's left edge, not the container's (StPageFlip #29 / PR #30).
 - Hard pages and hard shadows are placed from the book rect, so they are right when the book is
   not flush with its container's top-left.

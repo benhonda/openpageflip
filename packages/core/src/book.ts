@@ -47,6 +47,11 @@ export type Book = {
   /** Animated turns. Resolve with `false` when there is nothing to turn to. */
   flipNext(corner?: FlipCorner): Promise<boolean>;
   flipPrev(corner?: FlipCorner): Promise<boolean>;
+  /**
+   * Turns the page on show straight onto the spread holding `page`. Further than the next spread,
+   * it turns as a clump: a few blank sheets, one per spread passed up to five, fan out from under
+   * it and close up again before it lands. Only the pages on show and the target are drawn.
+   */
   flipTo(page: number, corner?: FlipCorner): Promise<boolean>;
   /** Instant turns. */
   turnTo(page: number): void;

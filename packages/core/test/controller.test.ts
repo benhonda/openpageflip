@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { FlipController, type FlipProgress, type Frame, REST_NUDGE } from "../src/controller.ts";
+import type { Point } from "../src/geometry/point.ts";
 import { computeLayout } from "../src/layout.ts";
 import {
   type BookOptions,
@@ -47,6 +48,14 @@ function setup(
   const last = () => frames[frames.length - 1] as Frame;
   return { controller, frames, shown, states, progress, manual, last };
 }
+
+const area = (points: readonly Point[]): number =>
+  Math.abs(
+    points.reduce((sum, a, i) => {
+      const b = points[(i + 1) % points.length] ?? a;
+      return sum + a.x * b.y - b.x * a.y;
+    }, 0),
+  ) / 2;
 
 /** Run the clock until the promise settles or `limit` ms pass. */
 async function settle<T>(
@@ -301,6 +310,18 @@ describe("FlipController", () => {
     const options = resolveOptions({ width: 250, height: 350, size: "stretch" });
     controller.setLayout(computeLayout(600, 420, options));
     expect(last().flip).toBeNull();
+    // And the book is at rest again, so the next hover or press is taken.
+    expect(controller.currentState).toBe(FlipState.read);
+  });
+
+  test("a resize mid-flip drops it and leaves the book at rest", async () => {
+    const { controller, manual } = setup({ size: "stretch" });
+    const turned = controller.flipNext(FlipCorner.top);
+    manual.advance(16);
+    const options = resolveOptions({ width: 250, height: 350, size: "stretch" });
+    controller.setLayout(computeLayout(600, 420, options));
+    expect(await turned).toBe(false);
+    expect(controller.currentState).toBe(FlipState.read);
   });
 
   test("flipTo jumps beside the target and animates the last turn", async () => {
@@ -309,6 +330,49 @@ describe("FlipController", () => {
     expect(controller.page).toBe(4);
     expect(shown.at(-1)).toBe(4);
     expect(await settle(controller.flipTo(4, FlipCorner.top), manual)).toBe(false);
+  });
+
+  describe("a jump past several spreads turns as a clump of sheets", () => {
+    test("one sheet per spread passed, fanning out from under the turning page and closed up before it lands", async () => {
+      const { controller, manual, shown, frames } = setup();
+      expect(await settle(controller.flipTo(5, FlipCorner.top), manual)).toBe(true);
+      expect(shown).toEqual([4]);
+      const flips = frames.flatMap((f) => (f.flip === null ? [] : [f.flip]));
+      expect(Math.max(...flips.map((f) => f.sheets.length))).toBe(2);
+      // The page on show turns straight onto the target: nothing in between is drawn.
+      expect(new Set(flips.map((f) => [f.flipping, f.bottom].join()))).toEqual(new Set(["4,5"]));
+
+      // How far each sheet's corner has been carried past the turning page's: each deeper sheet
+      // further, fanned out mid-turn.
+      const peeks = (f: (typeof flips)[number]): number[] =>
+        f.sheets.map((sheet) => {
+          const [corner] = sheet.flap;
+          const [lead] = f.fold.flippingClip;
+          return corner === undefined || lead === undefined
+            ? 0
+            : Math.hypot(corner.x - lead.x, corner.y - lead.y);
+        });
+      const fanned = flips.filter((f) => f.progress > 25 && f.progress < 55).map(peeks);
+      expect(fanned.length).toBeGreaterThan(0);
+      for (const [nearer = 0, deeper = 0] of fanned) {
+        expect(nearer).toBeGreaterThan(3);
+        expect(deeper).toBeGreaterThan(nearer);
+      }
+      // Closed up again well before it lands, so the clump comes down as one.
+      const late = flips.filter((f) => f.progress > 80).flatMap(peeks);
+      expect(late.length).toBeGreaterThan(0);
+      expect(late.every((peek) => peek < 0.5)).toBe(true);
+    });
+
+    test("a long jump turns five sheets at most; a turn of one page has none", async () => {
+      const { controller, manual, frames } = setup({}, 40);
+      expect(await settle(controller.flipTo(38, FlipCorner.top), manual)).toBe(true);
+      expect(Math.max(...frames.map((f) => f.flip?.sheets.length ?? 0))).toBe(5);
+
+      frames.length = 0;
+      expect(await settle(controller.flipPrev(FlipCorner.top), manual)).toBe(true);
+      expect(frames.every((f) => (f.flip?.sheets.length ?? 0) === 0)).toBe(true);
+    });
   });
 
   test("hovering an edge furls it over a quarter of flipDuration; leaving settles it as slowly", () => {
